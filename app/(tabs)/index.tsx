@@ -1,26 +1,28 @@
 /* eslint-disable react-hooks/exhaustive-deps */
+import FontAwesome from "@expo/vector-icons/FontAwesome";
+import { useNavigation, useRouter } from "expo-router";
+import { useSQLiteContext } from "expo-sqlite";
 import React, { useEffect, useState } from "react";
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  FlatList, 
-  StyleSheet, 
+import {
+  FlatList,
   ScrollView,
-  TouchableOpacity 
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useSQLiteContext } from "expo-sqlite";
-import FontAwesome from "@expo/vector-icons/FontAwesome";
 
 const HomeScreen = () => {
+  const router = useRouter();
   const db = useSQLiteContext();
   const [dollarPrice, setDollarPrice] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<any[]>([]);
   const [stats, setStats] = useState({
     carCount: 0,
-    shippingCount: 0
+    shippingCount: 0,
   });
 
   // Load data on component mount
@@ -51,7 +53,7 @@ const HomeScreen = () => {
 
       setStats({
         carCount: carRes?.count || 0,
-        shippingCount: shippingRes?.count || 0
+        shippingCount: shippingRes?.count || 0,
       });
     } catch (error) {
       console.log("Error loading stats:", error);
@@ -85,8 +87,13 @@ const HomeScreen = () => {
 
       const pattern = `%${text}%`;
       const res = await db.getAllAsync(query, [
-        pattern, pattern, pattern, pattern,
-        pattern, pattern, pattern
+        pattern,
+        pattern,
+        pattern,
+        pattern,
+        pattern,
+        pattern,
+        pattern,
       ]);
       setResults(res);
     } catch (error) {
@@ -96,25 +103,31 @@ const HomeScreen = () => {
 
   const getSourceIcon = (source: string) => {
     switch (source) {
-      case 'dollar':
+      case "dollar":
         return <FontAwesome name="dollar" size={16} color="#007AFF" />;
-      case 'car':
+      case "car":
         return <FontAwesome name="car" size={16} color="#34C759" />;
-      case 'shipping':
+      case "shipping":
         return <FontAwesome name="truck" size={16} color="#FF9500" />;
       default:
         return <FontAwesome name="search" size={16} color="#8E8E93" />;
     }
   };
+  const refreshPage = () => {
+    loadDollarPrice();
+    loadStats();
+    setSearch("");
+    setResults([]);
+  };
 
   const getSourceName = (source: string) => {
     switch (source) {
-      case 'dollar':
-        return 'قیمت دالر';
-      case 'car':
-        return 'خودرو';
-      case 'shipping':
-        return 'حمل و نقل';
+      case "dollar":
+        return "قیمت دالر";
+      case "car":
+        return "موتر";
+      case "shipping":
+        return "حمل و نقل";
       default:
         return source;
     }
@@ -125,32 +138,38 @@ const HomeScreen = () => {
       <ScrollView style={styles.scrollView}>
         {/* هدر صفحه */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>داشبورد مدیریت</Text>
+          <Text style={styles.headerTitle}>صفحه مدیریت</Text>
           <Text style={styles.headerSubtitle}>خلاصه اطلاعات و جستجو</Text>
+
+          <TouchableOpacity style={styles.refreshBtn} onPress={refreshPage}>
+            <FontAwesome name="refresh" size={20} color="#007AFF" />
+          </TouchableOpacity>
         </View>
 
         {/* کارت آمار */}
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
-            <View style={[styles.statIcon, { backgroundColor: '#E3F2FD' }]}>
+            <View style={[styles.statIcon, { backgroundColor: "#E3F2FD" }]}>
               <FontAwesome name="dollar" size={24} color="#007AFF" />
             </View>
             <Text style={styles.statValue}>
-              {dollarPrice ? `${dollarPrice.toLocaleString()} افغانی` : "ثبت نشده"}
+              {dollarPrice
+                ? `${dollarPrice.toLocaleString()} افغانی`
+                : "ثبت نشده"}
             </Text>
             <Text style={styles.statLabel}>قیمت دالر</Text>
           </View>
 
           <View style={styles.statCard}>
-            <View style={[styles.statIcon, { backgroundColor: '#E8F5E8' }]}>
+            <View style={[styles.statIcon, { backgroundColor: "#E8F5E8" }]}>
               <FontAwesome name="car" size={24} color="#34C759" />
             </View>
             <Text style={styles.statValue}>{stats.carCount}</Text>
-            <Text style={styles.statLabel}>تعداد خودروها</Text>
+            <Text style={styles.statLabel}>تعداد موترها</Text>
           </View>
 
           <View style={styles.statCard}>
-            <View style={[styles.statIcon, { backgroundColor: '#FFF3E0' }]}>
+            <View style={[styles.statIcon, { backgroundColor: "#FFF3E0" }]}>
               <FontAwesome name="truck" size={24} color="#FF9500" />
             </View>
             <Text style={styles.statValue}>{stats.shippingCount}</Text>
@@ -158,14 +177,28 @@ const HomeScreen = () => {
           </View>
         </View>
 
+        <View style={styles.startBtnSection}>
+          <TouchableOpacity
+            style={styles.startBtnSection}
+            onPress={() => router.push("/(screen)/FinalCarPriceScreen")}
+          >
+            <Text>محاسبه کنید</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* بخش جستجو */}
         <View style={styles.searchSection}>
           <Text style={styles.sectionTitle}>جستجوی پیشرفته</Text>
           <View style={styles.searchContainer}>
-            <FontAwesome name="search" size={20} color="#8E8E93" style={styles.searchIcon} />
+            <FontAwesome
+              name="search"
+              size={20}
+              color="#8E8E93"
+              style={styles.searchIcon}
+            />
             <TextInput
               style={styles.searchInput}
-              placeholder="جستجو در همه اطلاعات (قیمت، خودرو، حمل و نقل)..."
+              placeholder="جستجو در همه اطلاعات (قیمت، موتر، حمل و نقل)..."
               value={search}
               onChangeText={handleSearch}
               textAlign="right"
@@ -176,33 +209,34 @@ const HomeScreen = () => {
         {/* نتایج جستجو */}
         {search.length > 0 && (
           <View style={styles.resultsSection}>
-              <Text style={styles.resultsTitle}>
-                {`نتایج جستجو برای "${search}"`}
-              </Text>
-              
-              {results.length > 0 ? (
-                <FlatList
-                  data={results}
-                  scrollEnabled={false}
-                  keyExtractor={(item) => `${item.source}-${item.id}`}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity style={styles.resultItem}>
-                      <View style={styles.resultHeader}>
-                        <View style={styles.resultSource}>
-                          {getSourceIcon(item.source)}
-                          <Text style={styles.resultSourceText}>
-                            {getSourceName(item.source)}
-                          </Text>
-                        </View>
+            <Text style={styles.resultsTitle}>
+              {`نتایج جستجو برای "${search}"`}
+            </Text>
+
+            {results.length > 0 ? (
+              <FlatList
+                data={results}
+                scrollEnabled={false}
+                keyExtractor={(item) => `${item.source}-${item.id}`}
+                renderItem={({ item }) => (
+                  <TouchableOpacity style={styles.resultItem}>
+                    <View style={styles.resultHeader}>
+                      <View style={styles.resultSource}>
+                        {getSourceIcon(item.source)}
+                        <Text style={styles.resultSourceText}>
+                          {getSourceName(item.source)}
+                        </Text>
                       </View>
-                      <Text style={styles.resultTitle}>{item.title}</Text>
-                      <Text style={styles.resultValue}>
-                        {item.value.toLocaleString()} {item.source === 'dollar' ? 'افغانی' : 'ریال'}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                />
-              ) : (
+                    </View>
+                    <Text style={styles.resultTitle}>{item.title}</Text>
+                    <Text style={styles.resultValue}>
+                      {item.value.toLocaleString()}{" "}
+                      {item.source === "dollar" ? "افغانی" : "?"}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              />
+            ) : (
               <View style={styles.noResults}>
                 <FontAwesome name="search" size={48} color="#C7C7CC" />
                 <Text style={styles.noResultsText}>نتیجه‌ای یافت نشد</Text>
@@ -225,7 +259,7 @@ const HomeScreen = () => {
               </View>
               <View style={styles.guideItem}>
                 <FontAwesome name="car" size={20} color="#34C759" />
-                <Text style={styles.guideText}>ثبت و مدیریت خودروها</Text>
+                <Text style={styles.guideText}>ثبت و مدیریت موترها</Text>
               </View>
               <View style={styles.guideItem}>
                 <FontAwesome name="truck" size={20} color="#FF9500" />
@@ -285,6 +319,14 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  refreshBtn: {
+    position: "absolute",
+    left: 20,
+    top: 20,
+    backgroundColor: "#E3F2FD",
+    padding: 10,
+    borderRadius: 30,
+  },
   statIcon: {
     width: 50,
     height: 50,
@@ -304,6 +346,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#666",
     textAlign: "center",
+  },
+  startBtnSection: {
+    backgroundColor: "#fff",
+    margin: 16,
+    borderRadius: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   searchSection: {
     backgroundColor: "#fff",

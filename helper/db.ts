@@ -1,6 +1,6 @@
 import * as SQLite from "expo-sqlite";
 
-const db = SQLite.openDatabaseSync("local.db");
+export const db = SQLite.openDatabaseSync("local.db");
 
 // اجرای کوئری عمومی
 export const query = async <T = any>(
@@ -110,3 +110,62 @@ export const updateCar = (
 
 export const deleteCar = (id: number) =>
   query(`DELETE FROM Car WHERE id=?`, [id]);
+
+// پاک کردن تمام رکوردهای جدول final_car_prices
+export const clearFinalPrices = async (): Promise<void> => {
+  try {
+    await db.execAsync(`DELETE FROM final_car_prices`);
+  } catch (error) {
+    console.log("SQL error:", error);
+    throw error;
+  }
+};
+
+// ---------- ایجاد جدول اگر وجود نداشت ----------
+export const initFinalCarPricesTable = async (): Promise<void> => {
+  try {
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS final_car_prices (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        car_price REAL,
+        shipping_rate REAL,
+        total_tax REAL,
+        final_price REAL,
+        timestamp TEXT
+      )
+    `);
+  } catch (error) {
+    console.log("SQL error:", error);
+    throw error;
+  }
+};
+
+// ---------- اضافه کردن رکورد ----------
+export const addFinalCarPrice = async (
+  car_price: number,
+  shipping_rate: number,
+  total_tax: number,
+  final_price: number
+): Promise<void> => {
+  try {
+    const timestamp = new Date().toISOString();
+    await db.runAsync(
+      `INSERT INTO final_car_prices (car_price, shipping_rate, total_tax, final_price, timestamp)
+       VALUES (?, ?, ?, ?, ?)`,
+      [car_price, shipping_rate, total_tax, final_price, timestamp]
+    );
+  } catch (error) {
+    console.log("SQL error:", error);
+    throw error;
+  }
+};
+
+export const getFinalCarPrices = async (): Promise<any[]> => {
+  try {
+    const result = await db.getAllAsync(`SELECT * FROM final_car_prices ORDER BY id DESC`);
+    return result as any[];
+  } catch (error) {
+    console.log("SQL error:", error);
+    throw error;
+  }
+};

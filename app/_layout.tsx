@@ -12,7 +12,7 @@ export default function RootLayout() {
   return (
     <>
       <SQLiteProvider databaseName="local.db" onInit={createDbIfNeeded}>
-        <Stack>
+        <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="(screen)" options={{ headerShown: false }} />
         </Stack>

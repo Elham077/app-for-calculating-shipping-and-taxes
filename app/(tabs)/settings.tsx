@@ -5,7 +5,8 @@ import {
   Text, 
   TouchableOpacity, 
   View, 
-  ScrollView 
+  ScrollView, 
+  Linking
 } from "react-native";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 
@@ -21,9 +22,9 @@ export default function TabSettings() {
           <Text style={styles.subtitle}>مدیریت بخش‌های مختلف</Text>
         </View>
 
-        {/* بخش مدیریت داده‌ها */}
+        {/* بخش مدیریت اطلاعات */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>مدیریت داده‌ها</Text>
+          <Text style={styles.sectionTitle}>مدیریت اطلاعات</Text>
           
           <TouchableOpacity
             style={styles.option}
@@ -52,9 +53,9 @@ export default function TabSettings() {
                 <FontAwesome name="car" size={20} color="#34C759" />
               </View>
               <View style={styles.optionTextContainer}>
-                <Text style={styles.optionText}>مدیریت خودروها</Text>
+                <Text style={styles.optionText}>مدیریت موترها</Text>
                 <Text style={styles.optionDescription}>
-                  افزودن، ویرایش و حذف اطلاعات خودروها
+                  افزودن، ویرایش و حذف اطلاعات موترها
                 </Text>
               </View>
             </View>
@@ -72,105 +73,23 @@ export default function TabSettings() {
               <View style={styles.optionTextContainer}>
                 <Text style={styles.optionText}>مدیریت حمل و نقل</Text>
                 <Text style={styles.optionDescription}>
-                  تعریف مسیرها و نرخ‌های حمل
+                  مسیرها و نرخ‌های حمل
                 </Text>
               </View>
             </View>
             <FontAwesome name="chevron-left" size={16} color="#8E8E93" />
           </TouchableOpacity>
         </View>
-
-        {/* بخش تنظیمات برنامه */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>تنظیمات برنامه</Text>
-          
-          <TouchableOpacity style={styles.option}>
-            <View style={styles.optionContent}>
-              <View style={[styles.optionIcon, { backgroundColor: '#F0F0F0' }]}>
-                <FontAwesome name="language" size={20} color="#5856D6" />
-              </View>
-              <View style={styles.optionTextContainer}>
-                <Text style={styles.optionText}>زبان برنامه</Text>
-                <Text style={styles.optionDescription}>
-                  فارسی (پیش‌فرض)
-                </Text>
-              </View>
-            </View>
-            <FontAwesome name="chevron-left" size={16} color="#8E8E93" />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.option}>
-            <View style={styles.optionContent}>
-              <View style={[styles.optionIcon, { backgroundColor: '#F0F0F0' }]}>
-                <FontAwesome name="bell" size={20} color="#FF9500" />
-              </View>
-              <View style={styles.optionTextContainer}>
-                <Text style={styles.optionText}>اعلان‌ها</Text>
-                <Text style={styles.optionDescription}>
-                  مدیریت نوتیفیکیشن‌ها
-                </Text>
-              </View>
-            </View>
-            <FontAwesome name="chevron-left" size={16} color="#8E8E93" />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.option}>
-            <View style={styles.optionContent}>
-              <View style={[styles.optionIcon, { backgroundColor: '#F0F0F0' }]}>
-                <FontAwesome name="shield" size={20} color="#4CD964" />
-              </View>
-              <View style={styles.optionTextContainer}>
-                <Text style={styles.optionText}>حریم خصوصی</Text>
-                <Text style={styles.optionDescription}>
-                  تنظیمات امنیتی و حریم خصوصی
-                </Text>
-              </View>
-            </View>
-            <FontAwesome name="chevron-left" size={16} color="#8E8E93" />
-          </TouchableOpacity>
-        </View>
-
         {/* بخش پشتیبانی */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>پشتیبانی</Text>
-          
-          <TouchableOpacity style={styles.option}>
-            <View style={styles.optionContent}>
-              <View style={[styles.optionIcon, { backgroundColor: '#F0F0F0' }]}>
-                <FontAwesome name="question-circle" size={20} color="#007AFF" />
-              </View>
-              <View style={styles.optionTextContainer}>
-                <Text style={styles.optionText}>راهنما و آموزش</Text>
-                <Text style={styles.optionDescription}>
-                  راهنمای استفاده از برنامه
-                </Text>
-              </View>
-            </View>
-            <FontAwesome name="chevron-left" size={16} color="#8E8E93" />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.option}>
-            <View style={styles.optionContent}>
-              <View style={[styles.optionIcon, { backgroundColor: '#F0F0F0' }]}>
-                <FontAwesome name="info-circle" size={20} color="#5856D6" />
-              </View>
-              <View style={styles.optionTextContainer}>
-                <Text style={styles.optionText}>درباره برنامه</Text>
-                <Text style={styles.optionDescription}>
-                  نسخه و اطلاعات برنامه
-                </Text>
-              </View>
-            </View>
-            <FontAwesome name="chevron-left" size={16} color="#8E8E93" />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.option}>
+          <TouchableOpacity style={styles.option} onPress={() => Linking.openURL("https://wa.me/93744442863")}>
             <View style={styles.optionContent}>
               <View style={[styles.optionIcon, { backgroundColor: '#F0F0F0' }]}>
                 <FontAwesome name="envelope" size={20} color="#FF3B30" />
               </View>
               <View style={styles.optionTextContainer}>
-                <Text style={styles.optionText}>تماس با پشتیبانی</Text>
+                <Text style={styles.optionText}>تماس با سجاد</Text>
                 <Text style={styles.optionDescription}>
                   گزارش مشکل یا پیشنهاد
                 </Text>
