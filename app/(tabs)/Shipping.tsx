@@ -1,4 +1,6 @@
+import CategoryDropdown from "@/components/DropDownX";
 import SafeScreen from "@/components/SafeScreen";
+import { US_STATES } from "@/constants/usStates";
 import React, { useEffect, useState } from "react";
 import {
   Alert,
@@ -27,7 +29,7 @@ type ShippingType = {
 
 const ShippingScreen = () => {
   const [shippings, setShippings] = useState<ShippingType[]>([]);
-  const [state, setState] = useState("");
+  const [stateValue, setStateValue] = useState("");
   const [auction, setAuction] = useState("");
   const [rate, setRate] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -43,7 +45,7 @@ const ShippingScreen = () => {
   };
 
   const handleSave = async () => {
-    if (!state || !auction || !rate) {
+    if (!stateValue || !auction || !rate) {
       Alert.alert("خطا", "تمام فیلدها الزامی هستند");
       return;
     }
@@ -55,22 +57,22 @@ const ShippingScreen = () => {
     }
 
     if (editingId !== null) {
-      await updateShipping(editingId, state, auction, rateVal);
+      await updateShipping(editingId, stateValue, auction, rateVal);
       Alert.alert("موفق", "اطلاعات حمل و نقل با موفقیت به روز شد");
       setEditingId(null);
     } else {
-      await addShipping(state, auction, rateVal);
+      await addShipping(stateValue, auction, rateVal);
       Alert.alert("موفق", "حمل و نقل جدید با موفقیت افزوده شد");
     }
 
-    setState("");
+    setStateValue("");
     setAuction("");
     setRate("");
     loadShippings();
   };
 
   const handleEdit = (item: ShippingType) => {
-    setState(item.state);
+    setStateValue(item.state);
     setAuction(item.auction);
     setRate(item.rate.toString());
     setEditingId(item.id);
@@ -93,7 +95,7 @@ const ShippingScreen = () => {
 
   const cancelEdit = () => {
     setEditingId(null);
-    setState("");
+    setStateValue("");
     setAuction("");
     setRate("");
   };
@@ -117,13 +119,15 @@ const ShippingScreen = () => {
 
           <View style={styles.form}>
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>استان</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="نام ایالت امریکا(State) را وارد کنید"
-                value={state}
-                onChangeText={setState}
-                textAlign="right"
+              <Text style={styles.label}>ایالت</Text>
+              <CategoryDropdown
+                label="ولایت/ایالت"
+                placeholder="یک گزینه انتخاب کنید..."
+                items={US_STATES}
+                value={stateValue}
+                onChange={setStateValue}
+                searchable={true}
+                required={true}
               />
             </View>
 
@@ -139,7 +143,7 @@ const ShippingScreen = () => {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>نرخ (ریال)</Text>
+              <Text style={styles.label}>نرخ (افغانی)</Text>
               <TextInput
                 style={styles.input}
                 placeholder="نرخ را وارد کنید"
@@ -190,7 +194,7 @@ const ShippingScreen = () => {
                   <Text style={styles.itemAuction}>{item.auction}</Text>
                 </View>
                 <Text style={styles.itemRate}>
-                  {item.rate.toLocaleString()} ریال
+                  {item.rate.toLocaleString()} دالر
                 </Text>
               </View>
 

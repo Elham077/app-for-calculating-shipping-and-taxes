@@ -1,18 +1,20 @@
+import ExportExcel from "@/components/ExportExcel";
+import ImportExcel from "@/components/ImportExcel";
 import SafeScreen from "@/components/SafeScreen";
-import { useRouter } from "expo-router";
-import { 
-  StyleSheet, 
-  Text, 
-  TouchableOpacity, 
-  View, 
-  ScrollView, 
-  Linking
-} from "react-native";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
+import { useRouter } from "expo-router";
+import {
+  Linking,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 export default function TabSettings() {
   const router = useRouter();
-  
+
   return (
     <SafeScreen>
       <ScrollView style={styles.container}>
@@ -25,13 +27,13 @@ export default function TabSettings() {
         {/* بخش مدیریت اطلاعات */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>مدیریت اطلاعات</Text>
-          
+
           <TouchableOpacity
             style={styles.option}
             onPress={() => router.push("/(screen)/DollarScreen")}
           >
             <View style={styles.optionContent}>
-              <View style={[styles.optionIcon, { backgroundColor: '#E3F2FD' }]}>
+              <View style={[styles.optionIcon, { backgroundColor: "#E3F2FD" }]}>
                 <FontAwesome name="dollar" size={20} color="#007AFF" />
               </View>
               <View style={styles.optionTextContainer}>
@@ -49,7 +51,7 @@ export default function TabSettings() {
             onPress={() => router.push("/(tabs)/ImaratTax")}
           >
             <View style={styles.optionContent}>
-              <View style={[styles.optionIcon, { backgroundColor: '#E8F5E8' }]}>
+              <View style={[styles.optionIcon, { backgroundColor: "#E8F5E8" }]}>
                 <FontAwesome name="car" size={20} color="#34C759" />
               </View>
               <View style={styles.optionTextContainer}>
@@ -67,7 +69,7 @@ export default function TabSettings() {
             onPress={() => router.push("/(tabs)/Shipping")}
           >
             <View style={styles.optionContent}>
-              <View style={[styles.optionIcon, { backgroundColor: '#FFF3E0' }]}>
+              <View style={[styles.optionIcon, { backgroundColor: "#FFF3E0" }]}>
                 <FontAwesome name="truck" size={20} color="#FF9500" />
               </View>
               <View style={styles.optionTextContainer}>
@@ -80,13 +82,19 @@ export default function TabSettings() {
             <FontAwesome name="chevron-left" size={16} color="#8E8E93" />
           </TouchableOpacity>
         </View>
+
+        <ImportExcel />
+        <ExportExcel />
         {/* بخش پشتیبانی */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>پشتیبانی</Text>
-          <TouchableOpacity style={styles.option} onPress={() => Linking.openURL("https://wa.me/93744442863")}>
+          <TouchableOpacity
+            style={styles.option}
+            onPress={() => Linking.openURL("https://wa.me/93744442863")}
+          >
             <View style={styles.optionContent}>
-              <View style={[styles.optionIcon, { backgroundColor: '#F0F0F0' }]}>
-                <FontAwesome name="envelope" size={20} color="#FF3B30" />
+              <View style={[styles.optionIcon, { backgroundColor: "#F0F0F0" }]}>
+                <FontAwesome name="whatsapp" size={20} color="#FF3B30" />
               </View>
               <View style={styles.optionTextContainer}>
                 <Text style={styles.optionText}>تماس با سجاد</Text>

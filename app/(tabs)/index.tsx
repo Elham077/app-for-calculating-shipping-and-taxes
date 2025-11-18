@@ -1,6 +1,9 @@
 /* eslint-disable react-hooks/exhaustive-deps */
+import CategoryDropdown from "@/components/DropDownX";
+import FinalPriceList from "@/components/FinalPriceList";
+
 import FontAwesome from "@expo/vector-icons/FontAwesome";
-import { useNavigation, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import React, { useEffect, useState } from "react";
 import {
@@ -19,11 +22,40 @@ const HomeScreen = () => {
   const db = useSQLiteContext();
   const [dollarPrice, setDollarPrice] = useState<number | null>(null);
   const [search, setSearch] = useState("");
+  const [searchTable, setSearchTable] = useState<string>("all"); // all, dollar, car, shipping
   const [results, setResults] = useState<any[]>([]);
   const [stats, setStats] = useState({
     carCount: 0,
     shippingCount: 0,
   });
+
+  // گزینه‌های فیلتر جستجو
+  const searchFilterOptions = [
+    {
+      label: "همه جداول",
+      value: "all",
+      icon: "search",
+      color: "#007AFF"
+    },
+    {
+      label: "قیمت دالر",
+      value: "dollar",
+      icon: "dollar",
+      color: "#34C759"
+    },
+    {
+      label: "موترها",
+      value: "car",
+      icon: "car",
+      color: "#FF9500"
+    },
+    {
+      label: "حمل و نقل",
+      value: "shipping",
+      icon: "truck",
+      color: "#5856D6"
+    }
+  ];
 
   // Load data on component mount
   useEffect(() => {
@@ -70,31 +102,37 @@ const HomeScreen = () => {
     }
 
     try {
-      // Search across multiple tables (Dollar, Shipping, Car)
-      const query = `
+      const pattern = `%${text}%`;
+      let query = "";
+      let params: any[] = [];
+
+      if (searchTable === "all" || searchTable === "dollar") {
+        query += `
         SELECT 'dollar' AS source, id, daily_price AS value, 'قیمت دالر' as title
         FROM Dollar
-        WHERE daily_price LIKE ?
-        UNION
+        WHERE daily_price LIKE ?`;
+        params.push(pattern);
+      }
+
+      if (searchTable === "all" || searchTable === "shipping") {
+        if (query) query += " UNION ";
+        query += `
         SELECT 'shipping' AS source, id, rate AS value, state || ' - ' || auction as title
         FROM Shipping
-        WHERE state LIKE ? OR auction LIKE ? OR rate LIKE ?
-        UNION
+        WHERE state LIKE ? OR auction LIKE ? OR rate LIKE ?`;
+        params.push(pattern, pattern, pattern);
+      }
+
+      if (searchTable === "all" || searchTable === "car") {
+        if (query) query += " UNION ";
+        query += `
         SELECT 'car' AS source, id, total_tax AS value, name || ' - ' || modal as title
         FROM Car
-        WHERE name LIKE ? OR modal LIKE ? OR total_tax LIKE ?
-      `;
+        WHERE name LIKE ? OR modal LIKE ? OR total_tax LIKE ?`;
+        params.push(pattern, pattern, pattern);
+      }
 
-      const pattern = `%${text}%`;
-      const res = await db.getAllAsync(query, [
-        pattern,
-        pattern,
-        pattern,
-        pattern,
-        pattern,
-        pattern,
-        pattern,
-      ]);
+      const res = await db.getAllAsync(query, params);
       setResults(res);
     } catch (error) {
       console.log("Search error:", error);
@@ -113,11 +151,13 @@ const HomeScreen = () => {
         return <FontAwesome name="search" size={16} color="#8E8E93" />;
     }
   };
+
   const refreshPage = () => {
     loadDollarPrice();
     loadStats();
     setSearch("");
     setResults([]);
+    setSearchTable("all");
   };
 
   const getSourceName = (source: string) => {
@@ -131,6 +171,11 @@ const HomeScreen = () => {
       default:
         return source;
     }
+  };
+
+  const getSelectedFilterLabel = () => {
+    const selected = searchFilterOptions.find(option => option.value === searchTable);
+    return selected ? selected.label : "همه جداول";
   };
 
   return (
@@ -177,18 +222,42 @@ const HomeScreen = () => {
           </View>
         </View>
 
+        {/* دکمه محاسبه قیمت */}
         <View style={styles.startBtnSection}>
           <TouchableOpacity
-            style={styles.startBtnSection}
+            style={styles.startBtn}
             onPress={() => router.push("/(screen)/FinalCarPriceScreen")}
+            activeOpacity={0.7}
           >
-            <Text>محاسبه کنید</Text>
+            <FontAwesome name="calculator" size={20} color="#fff" />
+            <Text style={styles.startBtnText}>محاسبه قیمت نهایی</Text>
           </TouchableOpacity>
         </View>
 
         {/* بخش جستجو */}
         <View style={styles.searchSection}>
-          <Text style={styles.sectionTitle}>جستجوی پیشرفته</Text>
+          <View style={styles.searchHeader}>
+            <Text style={styles.sectionTitle}>جستجوی پیشرفته</Text>
+            <View style={styles.filterBadge}>
+              <Text style={styles.filterBadgeText}>
+                فیلتر: {getSelectedFilterLabel()}
+              </Text>
+            </View>
+          </View>
+
+          {/* فیلتر جستجو با Dropdown */}
+          <View style={styles.filterContainer}>
+            <CategoryDropdown
+              value={searchTable}
+              onChange={setSearchTable}
+              items={searchFilterOptions}
+              placeholder="فیلتر جستجو..."
+              label="جستجو در:"
+              searchable={true}
+            />
+          </View>
+
+          {/* نوار جستجو */}
           <View style={styles.searchContainer}>
             <FontAwesome
               name="search"
@@ -198,20 +267,45 @@ const HomeScreen = () => {
             />
             <TextInput
               style={styles.searchInput}
-              placeholder="جستجو در همه اطلاعات (قیمت، موتر، حمل و نقل)..."
+              placeholder={`جستجو در ${getSelectedFilterLabel().toLowerCase()}...`}
               value={search}
               onChangeText={handleSearch}
               textAlign="right"
             />
+            {search.length > 0 && (
+              <TouchableOpacity 
+                style={styles.clearSearchBtn}
+                onPress={() => setSearch("")}
+              >
+                <FontAwesome name="times" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+            )}
           </View>
+
+          {/* اطلاعات فیلتر فعال */}
+          {searchTable !== "all" && (
+            <View style={styles.activeFilterInfo}>
+              <FontAwesome name="info-circle" size={14} color="#007AFF" />
+              <Text style={styles.activeFilterText}>
+                جستجو فقط در {getSelectedFilterLabel()} انجام می‌شود
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* نتایج جستجو */}
         {search.length > 0 && (
           <View style={styles.resultsSection}>
-            <Text style={styles.resultsTitle}>
-              {`نتایج جستجو برای "${search}"`}
-            </Text>
+            <View style={styles.resultsHeader}>
+              <Text style={styles.resultsTitle}>
+                {`نتایج جستجو برای "${search}"`}
+              </Text>
+              <View style={styles.resultsCount}>
+                <Text style={styles.resultsCountText}>
+                  {results.length} نتیجه
+                </Text>
+              </View>
+            </View>
 
             {results.length > 0 ? (
               <FlatList
@@ -219,7 +313,12 @@ const HomeScreen = () => {
                 scrollEnabled={false}
                 keyExtractor={(item) => `${item.source}-${item.id}`}
                 renderItem={({ item }) => (
-                  <TouchableOpacity style={styles.resultItem}>
+                  <TouchableOpacity 
+                    style={[
+                      styles.resultItem,
+                      { borderLeftColor: getSourceColor(item.source) }
+                    ]}
+                  >
                     <View style={styles.resultHeader}>
                       <View style={styles.resultSource}>
                         {getSourceIcon(item.source)}
@@ -227,11 +326,16 @@ const HomeScreen = () => {
                           {getSourceName(item.source)}
                         </Text>
                       </View>
+                      <View style={styles.resultBadge}>
+                        <Text style={styles.resultBadgeText}>
+                          {getSourceName(item.source)}
+                        </Text>
+                      </View>
                     </View>
                     <Text style={styles.resultTitle}>{item.title}</Text>
                     <Text style={styles.resultValue}>
                       {item.value.toLocaleString()}{" "}
-                      {item.source === "dollar" ? "افغانی" : "?"}
+                      {item.source === "dollar" ? "افغانی" : "ریال"}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -241,36 +345,38 @@ const HomeScreen = () => {
                 <FontAwesome name="search" size={48} color="#C7C7CC" />
                 <Text style={styles.noResultsText}>نتیجه‌ای یافت نشد</Text>
                 <Text style={styles.noResultsSubtext}>
-                  سعی کنید عبارت جستجوی خود را تغییر دهید
+                  {searchTable === "all" 
+                    ? "سعی کنید عبارت جستجوی خود را تغییر دهید"
+                    : `هیچ نتیجه‌ای در ${getSelectedFilterLabel()} یافت نشد`
+                  }
                 </Text>
+                <TouchableOpacity 
+                  style={styles.changeFilterBtn}
+                  onPress={() => setSearchTable("all")}
+                >
+                  <Text style={styles.changeFilterText}>
+                    جستجو در همه جداول
+                  </Text>
+                </TouchableOpacity>
               </View>
             )}
           </View>
         )}
 
-        {/* راهنمای سریع */}
-        {search.length === 0 && (
-          <View style={styles.quickGuide}>
-            <Text style={styles.guideTitle}>راهنمای سریع</Text>
-            <View style={styles.guideItems}>
-              <View style={styles.guideItem}>
-                <FontAwesome name="dollar" size={20} color="#007AFF" />
-                <Text style={styles.guideText}>مدیریت قیمت دالر</Text>
-              </View>
-              <View style={styles.guideItem}>
-                <FontAwesome name="car" size={20} color="#34C759" />
-                <Text style={styles.guideText}>ثبت و مدیریت موترها</Text>
-              </View>
-              <View style={styles.guideItem}>
-                <FontAwesome name="truck" size={20} color="#FF9500" />
-                <Text style={styles.guideText}>تعریف مسیرهای حمل</Text>
-              </View>
-            </View>
-          </View>
-        )}
+        <FinalPriceList />
       </ScrollView>
     </SafeAreaView>
   );
+};
+
+// تابع کمکی برای رنگ‌های منبع
+const getSourceColor = (source: string) => {
+  switch (source) {
+    case "dollar": return "#34C759";
+    case "car": return "#FF9500";
+    case "shipping": return "#5856D6";
+    default: return "#007AFF";
+  }
 };
 
 export default HomeScreen;
@@ -348,14 +454,28 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   startBtnSection: {
-    backgroundColor: "#fff",
+    backgroundColor: "#ffffff",
     margin: 16,
-    borderRadius: 20,
+    borderRadius: 16,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  startBtn: {
+    backgroundColor: "#2563eb",
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row-reverse",
+    gap: 8,
+  },
+  startBtnText: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "600",
   },
   searchSection: {
     backgroundColor: "#fff",
@@ -368,12 +488,31 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  searchHeader: {
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: "600",
     color: "#1a1a1a",
-    marginBottom: 12,
     textAlign: "right",
+  },
+  filterBadge: {
+    backgroundColor: "#E3F2FD",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  filterBadgeText: {
+    fontSize: 12,
+    color: "#007AFF",
+    fontWeight: "500",
+  },
+  filterContainer: {
+    marginBottom: 12,
   },
   searchContainer: {
     flexDirection: "row-reverse",
@@ -392,21 +531,56 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: "right",
   },
+  clearSearchBtn: {
+    padding: 12,
+  },
+  activeFilterInfo: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 8,
+    padding: 8,
+    backgroundColor: "#F0F7FF",
+    borderRadius: 6,
+  },
+  activeFilterText: {
+    fontSize: 12,
+    color: "#007AFF",
+    textAlign: "right",
+  },
   resultsSection: {
     margin: 16,
+  },
+  resultsHeader: {
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
   },
   resultsTitle: {
     fontSize: 16,
     fontWeight: "600",
     color: "#1a1a1a",
-    marginBottom: 12,
     textAlign: "right",
+    flex: 1,
+  },
+  resultsCount: {
+    backgroundColor: "#f0f0f0",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  resultsCountText: {
+    fontSize: 12,
+    color: "#666",
+    fontWeight: "500",
   },
   resultItem: {
     backgroundColor: "#fff",
     padding: 16,
     borderRadius: 8,
     marginBottom: 8,
+    borderLeftWidth: 4,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
@@ -426,6 +600,17 @@ const styles = StyleSheet.create({
   },
   resultSourceText: {
     fontSize: 12,
+    color: "#666",
+    fontWeight: "500",
+  },
+  resultBadge: {
+    backgroundColor: "#f8f9fa",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  resultBadgeText: {
+    fontSize: 10,
     color: "#666",
     fontWeight: "500",
   },
@@ -454,44 +639,23 @@ const styles = StyleSheet.create({
     color: "#666",
     marginTop: 12,
     marginBottom: 4,
+    textAlign: "center",
   },
   noResultsSubtext: {
     fontSize: 14,
     color: "#999",
     textAlign: "center",
-  },
-  quickGuide: {
-    backgroundColor: "#fff",
-    margin: 16,
-    padding: 16,
-    borderRadius: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  guideTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1a1a1a",
     marginBottom: 16,
-    textAlign: "right",
   },
-  guideItems: {
-    gap: 12,
-  },
-  guideItem: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 12,
-    padding: 12,
-    backgroundColor: "#f8f9fa",
+  changeFilterBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: "#E3F2FD",
     borderRadius: 8,
   },
-  guideText: {
+  changeFilterText: {
+    color: "#007AFF",
     fontSize: 14,
-    color: "#333",
     fontWeight: "500",
   },
 });

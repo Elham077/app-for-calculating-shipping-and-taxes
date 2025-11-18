@@ -10,7 +10,7 @@ import {
   View,
 } from "react-native";
 import DropDownPicker from "react-native-dropdown-picker";
-import { addFinalCarPrice, getCar, getShipping } from "../../helper/db";
+import { addFinalCarPrice, db, getCar, getShipping } from "../../helper/db";
 
 // ---------- Types ----------
 interface ShippingType {
@@ -37,12 +37,24 @@ const FinalCarPriceScreen: React.FC = () => {
   const [shippingOpen, setShippingOpen] = useState(false);
   const [carOpen, setCarOpen] = useState(false);
   const [finalPrice, setFinalPrice] = useState<number | null>(null);
+  const [dollarPrice, setDollarPrice] = useState<number | null>(null);
 
   // -------- Load from SQLite --------
   useEffect(() => {
     loadShipping();
     loadCar();
+    loadDollarPrice();
   }, []);
+  const loadDollarPrice = async () => {
+    try {
+      const res = await db.getFirstAsync<{ daily_price: number }>(
+        "SELECT daily_price FROM Dollar ORDER BY id DESC LIMIT 1"
+      );
+      setDollarPrice(res?.daily_price || null);
+    } catch (error) {
+      console.log("Error loading dollar:", error);
+    }
+  };
 
   const loadShipping = async () => {
     try {
@@ -70,20 +82,20 @@ const FinalCarPriceScreen: React.FC = () => {
       setCarList(formatted);
     } catch (error) {
       console.log("Error loading cars:", error);
-      Alert.alert("خطا", "مشکلی در دریافت اطلاعات خودروها پیش آمد");
+      Alert.alert("خطا", "مشکلی در دریافت اطلاعات موترها پیش آمد");
     }
   };
 
   // -------- Calculator ----------
   const calculate = async () => {
     if (!carPrice || !selectedShipping || !selectedCar) {
-      Alert.alert("خطا", "لطفاً تمام فیلدها را پر کنید!");
+      Alert.alert("خطا", "لطفاً تمام بخش ها را پر کنید!");
       return;
     }
 
     const carPriceNum = Number(carPrice);
     if (isNaN(carPriceNum) || carPriceNum <= 0) {
-      Alert.alert("خطا", "لطفاً قیمت خودرو را به درستی وارد کنید");
+      Alert.alert("خطا", "لطفاً قیمت موتر را به درستی وارد کنید");
       return;
     }
 
@@ -92,10 +104,19 @@ const FinalCarPriceScreen: React.FC = () => {
 
     if (!shipping || !car) return;
 
-    const total = carPriceNum + shipping.rate + car.total_tax;
+    if (!dollarPrice || dollarPrice <= 0) {
+      Alert.alert("خطا", "قیمت دالر در دیتابیس ثبت نشده است!");
+      return;
+    }
+
+    // تبدیل مالیه از افغانی به دالر
+    const taxInDollar = car.total_tax / dollarPrice;
+
+    // قیمت نهایی
+    const total = carPriceNum + shipping.rate + taxInDollar;
 
     // ذخیره در دیتابیس
-    await addFinalCarPrice(carPriceNum, shipping.rate, car.total_tax, total);
+    await addFinalCarPrice(carPriceNum, shipping.rate, taxInDollar, total);
 
     setFinalPrice(total);
   };
@@ -114,20 +135,20 @@ const FinalCarPriceScreen: React.FC = () => {
       <ScrollView style={styles.container} nestedScrollEnabled={true}>
         {/* هدر صفحه */}
         <View style={styles.header}>
-          <Text style={styles.title}>🧮 ماشین حساب قیمت نهایی خودرو</Text>
+          <Text style={styles.title}>قیمت نهایی موتر</Text>
           <Text style={styles.subtitle}>
-            محاسبه قیمت تمام شده خودرو با احتساب مالیات و هزینه حمل
+            محاسبه قیمت تمام شده موتر با احتساب مالیات و هزینه حمل
           </Text>
         </View>
 
         {/* فرم محاسبه */}
         <View style={styles.formCard}>
-          {/* قیمت پایه خودرو */}
+          {/* قیمت پایه موتر */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>قیمت پایه خودرو (افغانی)</Text>
+            <Text style={styles.label}>قیمت پایه موتر (افغانی)</Text>
             <TextInput
               style={styles.input}
-              placeholder="قیمت خودرو را وارد کنید..."
+              placeholder="قیمت موتر را وارد کنید..."
               keyboardType="numeric"
               value={carPrice}
               onChangeText={setCarPrice}
@@ -160,9 +181,9 @@ const FinalCarPriceScreen: React.FC = () => {
             />
           </View>
 
-          {/* انتخاب خودرو و مالیات */}
+          {/* انتخاب موتر و مالیات */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>نوع خودرو و مالیات</Text>
+            <Text style={styles.label}>نوع موتر و مالیات</Text>
             <DropDownPicker
               open={carOpen}
               listMode="SCROLLVIEW"
@@ -171,7 +192,7 @@ const FinalCarPriceScreen: React.FC = () => {
               setOpen={setCarOpen}
               setValue={setSelectedCar}
               setItems={setCarList}
-              placeholder="خودرو و مالیات را انتخاب کنید"
+              placeholder="موتر و مالیات را انتخاب کنید"
               style={styles.dropdown}
               textStyle={styles.dropdownText}
               dropDownContainerStyle={styles.dropdownContainer}
@@ -212,7 +233,7 @@ const FinalCarPriceScreen: React.FC = () => {
                 textAlign: "center",
               }}
             >
-              قیمت نهایی: {finalPrice.toLocaleString()} افغانی
+              قیمت نهایی: {finalPrice.toLocaleString()} دالر
             </Text>
           )}
         </View>

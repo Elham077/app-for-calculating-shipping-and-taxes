@@ -1,5 +1,7 @@
+import { initDB } from "@/helper/db";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { Tabs } from "expo-router";
+import { useEffect } from "react";
 
 export default function TabLayout() {
   return (
