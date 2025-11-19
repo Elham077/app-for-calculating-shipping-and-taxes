@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+import CategoryDropdown from "@/components/DropDownX";
 import SafeScreen from "@/components/SafeScreen";
 import React, { useEffect, useState } from "react";
 import {
@@ -9,7 +11,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import DropDownPicker from "react-native-dropdown-picker";
 import { addFinalCarPrice, db, getCar, getShipping } from "../../helper/db";
 
 // ---------- Types ----------
@@ -145,7 +146,7 @@ const FinalCarPriceScreen: React.FC = () => {
         <View style={styles.formCard}>
           {/* قیمت پایه موتر */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>قیمت پایه موتر (افغانی)</Text>
+            <Text style={styles.label}>قیمت موتر (دالر)</Text>
             <TextInput
               style={styles.input}
               placeholder="قیمت موتر را وارد کنید..."
@@ -158,51 +159,34 @@ const FinalCarPriceScreen: React.FC = () => {
 
           {/* انتخاب مسیر حمل */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>مسیر حمل و نقل</Text>
-            <DropDownPicker
-              open={shippingOpen}
-              listMode="SCROLLVIEW"
-              value={selectedShipping}
-              items={shippingList}
-              setOpen={setShippingOpen}
-              setValue={setSelectedShipping}
-              setItems={setShippingList}
-              placeholder="استان و مزایده را انتخاب کنید"
-              style={styles.dropdown}
-              textStyle={styles.dropdownText}
-              dropDownContainerStyle={styles.dropdownContainer}
-              listItemContainerStyle={styles.listItemContainer}
-              listItemLabelStyle={styles.listItemLabel}
-              arrowIconStyle={styles.arrowIcon}
-              tickIconStyle={styles.tickIcon}
-              closeOnBackPressed={true}
-              zIndex={3000}
-              zIndexInverse={1000}
+            <Text style={styles.label}>نوع موتر و مالیات</Text>
+            <CategoryDropdown
+              value={selectedCar?.toString() || null}
+              onChange={(val: string) => setSelectedCar(Number(val))}
+              items={carList.map((item) => ({
+                label: item.label,
+                value: item.value.toString(),
+              }))}
+              placeholder="موتر و مالیات را انتخاب کنید"
+              required={true}
+              searchable={true}
             />
           </View>
 
           {/* انتخاب موتر و مالیات */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>نوع موتر و مالیات</Text>
-            <DropDownPicker
-              open={carOpen}
-              listMode="SCROLLVIEW"
-              value={selectedCar}
-              items={carList}
-              setOpen={setCarOpen}
-              setValue={setSelectedCar}
-              setItems={setCarList}
-              placeholder="موتر و مالیات را انتخاب کنید"
-              style={styles.dropdown}
-              textStyle={styles.dropdownText}
-              dropDownContainerStyle={styles.dropdownContainer}
-              listItemContainerStyle={styles.listItemContainer}
-              listItemLabelStyle={styles.listItemLabel}
-              arrowIconStyle={styles.arrowIcon}
-              tickIconStyle={styles.tickIcon}
-              closeOnBackPressed={true}
-              zIndex={2000}
-              zIndexInverse={2000}
+            <Text style={styles.label}>مسیر حمل و نقل</Text>
+            <CategoryDropdown
+              value={selectedShipping?.toString() || null} // value باید string یا null باشد
+              onChange={(val: string) => setSelectedShipping(Number(val))}
+              items={shippingList.map((item) => ({
+                label: item.label,
+                value: item.value.toString(),
+                // می‌توان icon و color اضافه کرد اگر نیاز باشد
+              }))}
+              placeholder="ایالت و مزایده را انتخاب کنید"
+              required={true}
+              searchable={true}
             />
           </View>
 

@@ -1,9 +1,8 @@
 import FontAwesome from "@expo/vector-icons/FontAwesome";
-import { Picker } from "@react-native-picker/picker";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { useSQLiteContext } from "expo-sqlite";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -16,38 +15,48 @@ import {
 } from "react-native";
 import { utils, write } from "xlsx";
 
+type ExportStep = "select-table" | "preparing" | "ready" | "complete";
+
 const ExportExcel: React.FC = () => {
   const db = useSQLiteContext();
-  const [table, setTable] = useState<string>("Shipping");
+  const [table, setTable] = useState<string>("");
+  const [currentStep, setCurrentStep] = useState<ExportStep>("select-table");
   const [loading, setLoading] = useState(false);
   const [exportStats, setExportStats] = useState({
     totalRecords: 0,
     fileSize: "0 KB",
     fileName: "",
+    fileUri: "",
   });
+  const [tableCounts, setTableCounts] = useState<{ [key: string]: number }>({});
 
   const tableConfig = {
-    Dollar: {
-      name: "قیمت دالر",
-      description: "تاریخچه قیمت‌های دالر",
-      icon: "dollar",
-    },
     Car: {
       name: "موترها",
       description: "لیست موترها و مالیات آنها",
       icon: "car",
+      color: "#007AFF",
     },
     Shipping: {
       name: "حمل و نقل",
       description: "مسیرهای حمل و نرخ‌های مربوطه",
       icon: "truck",
+      color: "#34C759",
     },
     final_car_prices: {
       name: "قیمت‌های نهایی",
       description: "تاریخچه محاسبات قیمت نهایی موتر",
       icon: "calculator",
+      color: "#FF9500",
     },
   };
+
+  const steps = [
+    { key: "select-table", title: "انتخاب جدول", icon: "table" },
+    { key: "preparing", title: "آماده‌سازی", icon: "cog" },
+    { key: "ready", title: "آماده دریافت", icon: "check" },
+    { key: "complete", title: "اتمام", icon: "share" },
+  ];
 
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return "0 B";
@@ -57,33 +66,56 @@ const ExportExcel: React.FC = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   };
 
-  const handleExport = async () => {
+  const getTableInfo = async (tableName: string) => {
     try {
-      setLoading(true);
-      setExportStats({ totalRecords: 0, fileSize: "0 KB", fileName: "" });
+      const countResult = await db.getFirstAsync<{ count: number }>(
+        `SELECT COUNT(*) as count FROM ${tableName}`
+      );
+      return countResult?.count || 0;
+    } catch (error) {
+      console.log("Error getting table info:", error);
+      return 0;
+    }
+  };
 
-      // 1. Load data with progress
+  const [tableCount, setTableCount] = useState(0);
+
+  useEffect(() => {
+    if (table) {
+      const loadTableCount = async () => {
+        const count = await getTableInfo(table);
+        setTableCount(count);
+      };
+      loadTableCount();
+    }
+  }, [table]);
+
+  const handleTableSelect = (selectedTable: string) => {
+    setTable(selectedTable);
+  };
+
+  const handlePrepareExport = async () => {
+    if (!table || tableCount === 0) {
+      Alert.alert("خطا", "لطفاً جدولی با داده انتخاب کنید");
+      return;
+    }
+
+    setCurrentStep("preparing");
+    setLoading(true);
+
+    try {
+      // 1. Load data
       const rows: any[] = await db.getAllAsync(`SELECT * FROM ${table}`);
 
       if (rows.length === 0) {
-        Alert.alert(
-          "خطا ❌",
-          `هیچ تاریخچه یی در جدول "${
-            tableConfig[table as keyof typeof tableConfig].name
-          }" یافت نشد`
-        );
+        Alert.alert("خطا", "جدول انتخاب شده خالی است");
+        setCurrentStep("select-table");
         setLoading(false);
         return;
       }
 
-      setExportStats((prev) => ({ ...prev, totalRecords: rows.length }));
-
       // 2. Prepare worksheet
       const ws = utils.json_to_sheet(rows);
-
-      // حذف تنظیمات ناسازگار با موبایل
-      delete ws["!cols"];
-
       const wb = utils.book_new();
       utils.book_append_sheet(wb, ws, table);
 
@@ -113,64 +145,289 @@ const ExportExcel: React.FC = () => {
         totalRecords: rows.length,
         fileSize,
         fileName,
+        fileUri,
       });
 
-      // 5. Share / Download
+      setCurrentStep("ready");
+    } catch (error) {
+      console.log("Export preparation error:", error);
+      Alert.alert("خطا", "مشکلی در آماده‌سازی فایل پیش آمد");
+      setCurrentStep("select-table");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleShareFile = async () => {
+    try {
       if (Platform.OS === "ios" || Platform.OS === "android") {
         const canShare = await Sharing.isAvailableAsync();
         if (canShare) {
-          await Sharing.shareAsync(fileUri, {
+          await Sharing.shareAsync(exportStats.fileUri, {
             mimeType:
               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             dialogTitle: `خروجی ${
               tableConfig[table as keyof typeof tableConfig].name
             }`,
           });
+          setCurrentStep("complete");
         } else {
           Alert.alert(
             "موفقیت ✅",
-            `فایل Excel ساخته شد:\n\n📊 تعداد تاریخچه ها: ${rows.length}\n💾 حجم فایل: ${fileSize}\n\nمسیر فایل: ${fileUri}`
+            `فایل Excel ساخته شد:\n\n📊 تعداد رکوردها: ${exportStats.totalRecords}\n💾 حجم فایل: ${exportStats.fileSize}`
           );
+          setCurrentStep("complete");
         }
       } else {
         Alert.alert(
           "موفقیت ✅",
-          `فایل Excel ساخته شد:\n\n📊 تعداد تاریخچه ها: ${rows.length}\n💾 حجم فایل: ${fileSize}\n\nمسیر فایل: ${fileUri}`
+          `فایل Excel ساخته شد:\n\n📊 تعداد رکوردها: ${exportStats.totalRecords}\n💾 حجم فایل: ${exportStats.fileSize}`
         );
+        setCurrentStep("complete");
       }
     } catch (error) {
-      console.log("Export Excel error:", error);
-      Alert.alert(
-        "خطا ❌",
-        "خطا در ساخت فایل Excel. لطفاً اطمینان حاصل کنید که اطلاعات معتبری در جدول وجود دارد."
-      );
-    } finally {
-      setLoading(false);
+      console.log("Share error:", error);
+      Alert.alert("خطا", "مشکلی در اشتراک‌گذاری فایل پیش آمد");
     }
   };
 
-  const getTableInfo = async () => {
-    try {
-      const countResult = await db.getFirstAsync<{ count: number }>(
-        `SELECT COUNT(*) as count FROM ${table}`
-      );
-      return countResult?.count || 0;
-    } catch (error) {
-      console.log("Error getting table info:", error);
-      return 0;
-    }
+  const resetProcess = () => {
+    setTable("");
+    setCurrentStep("select-table");
+    setExportStats({
+      totalRecords: 0,
+      fileSize: "0 KB",
+      fileName: "",
+      fileUri: "",
+    });
   };
-
-  const [tableCount, setTableCount] = useState(0);
-
-  React.useEffect(() => {
-    const loadTableCount = async () => {
-      const count = await getTableInfo();
-      setTableCount(count);
+  useEffect(() => {
+    const loadAllCounts = async () => {
+      const result: any = {};
+      for (const key of Object.keys(tableConfig)) {
+        result[key] = await getTableInfo(key);
+      }
+      setTableCounts(result);
     };
-    loadTableCount();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [table]);
+
+    loadAllCounts();
+  }, []);
+
+  const renderStepIndicator = () => {
+    return (
+      <View style={styles.stepsContainer}>
+        {steps.map((step, index) => {
+          const isActive = step.key === currentStep;
+          const isCompleted =
+            steps.findIndex((s) => s.key === currentStep) > index;
+
+          return (
+            <View key={step.key} style={styles.stepItem}>
+              <View
+                style={[
+                  styles.stepCircle,
+                  isActive && styles.stepCircleActive,
+                  isCompleted && styles.stepCircleCompleted,
+                ]}
+              >
+                {isCompleted ? (
+                  <FontAwesome name="check" size={16} color="#fff" />
+                ) : (
+                  <FontAwesome
+                    name={step.icon as any}
+                    size={16}
+                    color={isActive ? "#007AFF" : "#8E8E93"}
+                  />
+                )}
+              </View>
+              <Text
+                style={[
+                  styles.stepText,
+                  isActive && styles.stepTextActive,
+                  isCompleted && styles.stepTextCompleted,
+                ]}
+              >
+                {step.title}
+              </Text>
+              {index < steps.length - 1 && (
+                <View
+                  style={[
+                    styles.stepLine,
+                    isCompleted && styles.stepLineCompleted,
+                  ]}
+                />
+              )}
+            </View>
+          );
+        })}
+      </View>
+    );
+  };
+
+  const renderSelectTableStep = () => (
+    <View style={styles.stepContent}>
+      <Text style={styles.stepTitle}>
+        لطفاً جدول مورد نظر برای خروجی را انتخاب کنید
+      </Text>
+
+      <View style={styles.tablesGrid}>
+        {Object.entries(tableConfig).map(([key, config]) => {
+          const count = tableCounts[key] || 0;
+
+          return (
+            <TouchableOpacity
+              key={key}
+              style={[
+                styles.tableCard,
+                table === key && styles.tableCardSelected,
+              ]}
+              onPress={() => handleTableSelect(key)}
+            >
+              <View
+                style={[
+                  styles.tableIcon,
+                  { backgroundColor: config.color + "20" },
+                ]}
+              >
+                <FontAwesome
+                  name={config.icon as any}
+                  size={24}
+                  color={config.color}
+                />
+              </View>
+
+              <Text style={styles.tableName}>{config.name}</Text>
+              <Text style={styles.tableDescription}>{config.description}</Text>
+
+              <View style={styles.tableStats}>
+                <FontAwesome name="database" size={12} color="#666" />
+                <Text style={styles.tableCount}>{count} رکورد</Text>
+              </View>
+
+              {table === key && (
+                <View style={styles.selectedBadge}>
+                  <FontAwesome name="check" size={12} color="#fff" />
+                </View>
+              )}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {table && (
+        <TouchableOpacity
+          style={[
+            styles.continueBtn,
+            tableCount === 0 && styles.continueBtnDisabled,
+          ]}
+          onPress={handlePrepareExport}
+          disabled={tableCount === 0}
+        >
+          <FontAwesome name="arrow-left" size={16} color="#fff" />
+          <Text style={styles.continueBtnText}>
+            {tableCount === 0 ? "جدول خالی است" : "ادامه و آماده‌سازی فایل"}
+          </Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+
+  const renderPreparingStep = () => (
+    <View style={styles.stepContent}>
+      <Text style={styles.stepTitle}>در حال آماده‌سازی فایل خروجی</Text>
+
+      <ActivityIndicator
+        size="large"
+        color="#007AFF"
+        style={styles.loadingSpinner}
+      />
+
+      <View style={styles.preparingContent}>
+        <FontAwesome name="file-excel-o" size={48} color="#34C759" />
+        <Text style={styles.preparingText}>
+          در حال پردازش {tableCount} رکورد از جدول{" "}
+          {tableConfig[table as keyof typeof tableConfig].name}
+        </Text>
+      </View>
+    </View>
+  );
+
+  const renderReadyStep = () => (
+    <View style={styles.stepContent}>
+      <View style={styles.readyIcon}>
+        <FontAwesome name="file-excel-o" size={64} color="#34C759" />
+      </View>
+
+      <Text style={styles.readyTitle}>فایل خروجی آماده است</Text>
+
+      <View style={styles.fileInfoCard}>
+        <View style={styles.fileInfoRow}>
+          <FontAwesome name="file-text-o" size={20} color="#007AFF" />
+          <View style={styles.fileInfoContent}>
+            <Text style={styles.fileInfoLabel}>نام فایل</Text>
+            <Text style={styles.fileInfoValue}>{exportStats.fileName}</Text>
+          </View>
+        </View>
+
+        <View style={styles.fileInfoRow}>
+          <FontAwesome name="database" size={20} color="#34C759" />
+          <View style={styles.fileInfoContent}>
+            <Text style={styles.fileInfoLabel}>تعداد رکوردها</Text>
+            <Text style={styles.fileInfoValue}>
+              {exportStats.totalRecords} رکورد
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.fileInfoRow}>
+          <FontAwesome name="hdd-o" size={20} color="#FF9500" />
+          <View style={styles.fileInfoContent}>
+            <Text style={styles.fileInfoLabel}>حجم فایل</Text>
+            <Text style={styles.fileInfoValue}>{exportStats.fileSize}</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.readyActions}>
+        <TouchableOpacity style={styles.shareBtn} onPress={handleShareFile}>
+          <FontAwesome name="share" size={20} color="#fff" />
+          <Text style={styles.shareBtnText}>اشتراک‌گذاری فایل</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.secondaryBtn} onPress={resetProcess}>
+          <Text style={styles.secondaryBtnText}>خروجی جدید</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  const renderCompleteStep = () => (
+    <View style={styles.stepContent}>
+      <View style={styles.completeIcon}>
+        <FontAwesome name="check-circle" size={64} color="#34C759" />
+      </View>
+
+      <Text style={styles.completeTitle}>خروجی با موفقیت انجام شد</Text>
+
+      <View style={styles.completeStats}>
+        <View style={styles.completeStat}>
+          <Text style={styles.completeStatNumber}>
+            {exportStats.totalRecords}
+          </Text>
+          <Text style={styles.completeStatLabel}>رکورد خروجی گرفته شده</Text>
+        </View>
+        <View style={styles.completeStat}>
+          <Text style={styles.completeStatNumber}>{exportStats.fileSize}</Text>
+          <Text style={styles.completeStatLabel}>حجم فایل</Text>
+        </View>
+      </View>
+
+      <TouchableOpacity style={styles.restartBtn} onPress={resetProcess}>
+        <FontAwesome name="refresh" size={16} color="#007AFF" />
+        <Text style={styles.restartBtnText}>خروجی جدید از جدول دیگر</Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   return (
     <ScrollView style={styles.container}>
@@ -180,140 +437,26 @@ const ExportExcel: React.FC = () => {
         <Text style={styles.headerTitle}>خروجی اطلاعات به Excel</Text>
       </View>
 
-      {/* انتخاب جدول */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>انتخاب جدول مبدأ</Text>
-        <View style={styles.pickerContainer}>
-          <Picker
-            selectedValue={table}
-            onValueChange={(value) => setTable(value)}
-            style={styles.picker}
-          >
-            {Object.entries(tableConfig).map(([key, config]) => (
-              <Picker.Item key={key} label={config.name} value={key} />
-            ))}
-          </Picker>
-        </View>
-      </View>
+      {/* نمایش مراحل */}
+      {renderStepIndicator()}
 
-      {/* اطلاعات جدول */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>اطلاعات جدول انتخابی</Text>
-        <View style={styles.tableInfo}>
-          <View style={styles.infoRow}>
-            <FontAwesome
-              name={tableConfig[table as keyof typeof tableConfig].icon as any}
-              size={18}
-              color="#007AFF"
-            />
-            <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>نام جدول:</Text>
-              <Text style={styles.infoValue}>
-                {tableConfig[table as keyof typeof tableConfig].name}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.infoRow}>
-            <FontAwesome name="info-circle" size={18} color="#FF9500" />
-            <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>توضیحات:</Text>
-              <Text style={styles.infoValue}>
-                {tableConfig[table as keyof typeof tableConfig].description}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.infoRow}>
-            <FontAwesome name="database" size={18} color="#34C759" />
-            <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>تعداد تاریخچه ها:</Text>
-              <Text style={[styles.infoValue, styles.recordCount]}>
-                {tableCount} رکورد
-              </Text>
-            </View>
-          </View>
-        </View>
-      </View>
-
-      {/* دکمه export */}
-      <TouchableOpacity
-        style={[styles.exportBtn, loading && styles.exportBtnDisabled]}
-        onPress={handleExport}
-        disabled={loading || tableCount === 0}
-      >
-        {loading ? (
-          <ActivityIndicator size="small" color="#fff" />
-        ) : (
-          <FontAwesome name="download" size={20} color="#fff" />
-        )}
-        <Text style={styles.exportText}>
-          {loading
-            ? "در حال ساخت فایل..."
-            : tableCount === 0
-            ? "جدول خالی است"
-            : "دریافت خروجی Excel"}
-        </Text>
-      </TouchableOpacity>
-
-      {/* آمار export */}
-      {exportStats.totalRecords > 0 && (
-        <View style={styles.statsContainer}>
-          <Text style={styles.statsTitle}>📊 اطلاعات فایل خروجی:</Text>
-          <View style={styles.statsGrid}>
-            <View style={styles.statItem}>
-              <FontAwesome name="file-text-o" size={20} color="#007AFF" />
-              <Text style={styles.statNumber}>{exportStats.totalRecords}</Text>
-              <Text style={styles.statLabel}>تعداد تاریخچه ها</Text>
-            </View>
-            <View style={styles.statItem}>
-              <FontAwesome name="hdd-o" size={20} color="#34C759" />
-              <Text style={styles.statNumber}>{exportStats.fileSize}</Text>
-              <Text style={styles.statLabel}>حجم فایل</Text>
-            </View>
-            <View style={styles.statItem}>
-              <FontAwesome name="calendar" size={20} color="#FF9500" />
-              <Text style={styles.statNumber}>
-                {new Date().toLocaleDateString("fa-IR")}
-              </Text>
-              <Text style={styles.statLabel}>تاریخ خروجی</Text>
-            </View>
-          </View>
-        </View>
-      )}
+      {/* محتوای هر مرحله */}
+      {currentStep === "select-table" && renderSelectTableStep()}
+      {currentStep === "preparing" && renderPreparingStep()}
+      {currentStep === "ready" && renderReadyStep()}
+      {currentStep === "complete" && renderCompleteStep()}
 
       {/* راهنمای استفاده */}
-      <View style={styles.guideSection}>
-        <Text style={styles.guideTitle}>💡 راهنمای استفاده:</Text>
-        <View style={styles.guideList}>
-          <Text style={styles.guideItem}>
-            • فایل خروجی با قالب معیاری Excel ساخته می‌شود
-          </Text>
-          <Text style={styles.guideItem}>
-            • اطلاعات به صورت راست‌چین در فایل قرار می‌گیرند
-          </Text>
-          <Text style={styles.guideItem}>
-            • می‌توانید فایل را در Excel، Google Sheets یا LibreOffice باز کنید
-          </Text>
-          <Text style={styles.guideItem}>
-            • فایل شامل تمامی تاریخچه های جدول انتخابی خواهد بود
-          </Text>
-          <Text style={styles.guideItem}>
-            • نام فایل شامل تاریخ روز جاری می‌باشد
+      {currentStep === "select-table" && (
+        <View style={styles.guideSection}>
+          <Text style={styles.guideTitle}>💡 راهنمای خروجی گرفتن:</Text>
+          <Text style={styles.guideText}>
+            • جدول مورد نظر را انتخاب کنید{"\n"}• فایل Excel با فرمت استاندارد
+            ساخته می‌شود{"\n"}• می‌توانید فایل را در نرم‌افزارهای مختلف باز کنید
+            {"\n"}• فایل شامل تمامی داده‌های جدول انتخابی خواهد بود
           </Text>
         </View>
-      </View>
-
-      {/* نکات فنی */}
-      <View style={styles.techSection}>
-        <Text style={styles.techTitle}>🔧 نکات فنی:</Text>
-        <Text style={styles.techText}>
-          قالب فایل: XLSX (Excel){"\n"}
-          کدگذاری: UTF-8{"\n"}
-          حداکثر سایز: بدون محدودیت{"\n"}
-          سازگاری: Excel 2007 به بعد
-        </Text>
-      </View>
+      )}
     </ScrollView>
   );
 };
@@ -339,128 +482,286 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#1a1a1a",
   },
-  section: {
+  stepsContainer: {
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    padding: 20,
+    marginBottom: 8,
+  },
+  stepItem: {
+    alignItems: "center",
+    flex: 1,
+    position: "relative",
+  },
+  stepCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#f0f0f0",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+  stepCircleActive: {
+    backgroundColor: "#E3F2FD",
+    borderWidth: 2,
+    borderColor: "#007AFF",
+  },
+  stepCircleCompleted: {
+    backgroundColor: "#34C759",
+  },
+  stepText: {
+    fontSize: 10,
+    color: "#8E8E93",
+    fontWeight: "500",
+    textAlign: "center",
+  },
+  stepTextActive: {
+    color: "#007AFF",
+    fontWeight: "600",
+  },
+  stepTextCompleted: {
+    color: "#34C759",
+  },
+  stepLine: {
+    position: "absolute",
+    top: 18,
+    left: -40,
+    width: 80,
+    height: 2,
+    backgroundColor: "#f0f0f0",
+    zIndex: -1,
+  },
+  stepLineCompleted: {
+    backgroundColor: "#34C759",
+  },
+  stepContent: {
     backgroundColor: "#fff",
     margin: 16,
-    marginBottom: 8,
-    padding: 16,
-    borderRadius: 12,
+    padding: 24,
+    borderRadius: 16,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  sectionTitle: {
+  stepTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#1a1a1a",
+    textAlign: "center",
+    marginBottom: 24,
+    lineHeight: 28,
+  },
+  tablesGrid: {
+    gap: 16,
+  },
+  tableCard: {
+    backgroundColor: "#fafafa",
+    padding: 20,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: "transparent",
+    position: "relative",
+  },
+  tableCardSelected: {
+    backgroundColor: "#E3F2FD",
+    borderColor: "#007AFF",
+  },
+  tableIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  tableName: {
     fontSize: 16,
     fontWeight: "600",
     color: "#1a1a1a",
-    marginBottom: 12,
+    marginBottom: 4,
     textAlign: "right",
   },
-  pickerContainer: {
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    overflow: "hidden",
-    backgroundColor: "#fafafa",
+  tableDescription: {
+    fontSize: 13,
+    color: "#666",
+    textAlign: "right",
+    marginBottom: 12,
+    lineHeight: 20,
   },
-  picker: {
-    height: 50,
-  },
-  tableInfo: {
-    gap: 12,
-  },
-  infoRow: {
+  tableStats: {
     flexDirection: "row-reverse",
-    alignItems: "flex-start",
-    gap: 12,
+    alignItems: "center",
+    gap: 6,
   },
-  infoContent: {
-    flex: 1,
-  },
-  infoLabel: {
+  tableCount: {
     fontSize: 12,
     color: "#666",
-    marginBottom: 2,
-  },
-  infoValue: {
-    fontSize: 14,
-    color: "#1a1a1a",
     fontWeight: "500",
   },
-  recordCount: {
-    color: "#34C759",
-    fontWeight: "700",
+  selectedBadge: {
+    position: "absolute",
+    top: 12,
+    left: 12,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#34C759",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  exportBtn: {
+  continueBtn: {
     flexDirection: "row-reverse",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
     backgroundColor: "#007AFF",
-    margin: 16,
     padding: 16,
     borderRadius: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    marginTop: 20,
   },
-  exportBtnDisabled: {
+  continueBtnDisabled: {
     backgroundColor: "#C7C7CC",
   },
-  exportText: {
+  continueBtnText: {
     color: "#fff",
-    fontWeight: "700",
-    fontSize: 16,
-  },
-  statsContainer: {
-    backgroundColor: "#fff",
-    margin: 16,
-    padding: 16,
-    borderRadius: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  statsTitle: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#1a1a1a",
-    marginBottom: 16,
-    textAlign: "right",
   },
-  statsGrid: {
-    flexDirection: "row-reverse",
-    justifyContent: "space-between",
+  loadingSpinner: {
+    marginVertical: 30,
   },
-  statItem: {
+  preparingContent: {
     alignItems: "center",
-    flex: 1,
+    paddingVertical: 20,
   },
-  statNumber: {
+  preparingText: {
     fontSize: 16,
-    fontWeight: "bold",
-    color: "#1a1a1a",
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
     color: "#666",
     textAlign: "center",
+    marginTop: 16,
+    lineHeight: 24,
+  },
+  readyIcon: {
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  readyTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: "#1a1a1a",
+    textAlign: "center",
+    marginBottom: 24,
+  },
+  fileInfoCard: {
+    backgroundColor: "#f8f9fa",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+  },
+  fileInfoRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 8,
+  },
+  fileInfoContent: {
+    flex: 1,
+  },
+  fileInfoLabel: {
+    fontSize: 12,
+    color: "#666",
+    marginBottom: 2,
+  },
+  fileInfoValue: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1a1a1a",
+  },
+  readyActions: {
+    gap: 12,
+  },
+  shareBtn: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#34C759",
+    padding: 16,
+    borderRadius: 12,
+  },
+  shareBtnText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  secondaryBtn: {
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    alignItems: "center",
+  },
+  secondaryBtnText: {
+    color: "#666",
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  completeIcon: {
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  completeTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: "#1a1a1a",
+    textAlign: "center",
+    marginBottom: 30,
+  },
+  completeStats: {
+    flexDirection: "row-reverse",
+    justifyContent: "space-around",
+    marginBottom: 30,
+  },
+  completeStat: {
+    alignItems: "center",
+  },
+  completeStatNumber: {
+    fontSize: 28,
+    fontWeight: "bold",
+    color: "#34C759",
+  },
+  completeStatLabel: {
+    fontSize: 12,
+    color: "#666",
+    marginTop: 4,
+    textAlign: "center",
+  },
+  restartBtn: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+    padding: 16,
+    backgroundColor: "#E3F2FD",
+    borderRadius: 12,
+    alignSelf: "center",
+  },
+  restartBtnText: {
+    color: "#007AFF",
+    fontSize: 16,
+    fontWeight: "600",
   },
   guideSection: {
     backgroundColor: "#fff",
     margin: 16,
-    padding: 16,
+    padding: 20,
     borderRadius: 12,
     borderLeftWidth: 4,
-    borderLeftColor: "#34C759",
+    borderLeftColor: "#FF9500",
   },
   guideTitle: {
     fontSize: 16,
@@ -469,35 +770,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     textAlign: "right",
   },
-  guideList: {
-    gap: 8,
-  },
-  guideItem: {
+  guideText: {
     fontSize: 14,
     color: "#666",
-    lineHeight: 20,
-    textAlign: "right",
-  },
-  techSection: {
-    backgroundColor: "#fff",
-    margin: 16,
-    padding: 16,
-    borderRadius: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: "#FF9500",
-    marginBottom: 20,
-  },
-  techTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1a1a1a",
-    marginBottom: 8,
-    textAlign: "right",
-  },
-  techText: {
-    fontSize: 14,
-    color: "#666",
-    lineHeight: 20,
+    lineHeight: 22,
     textAlign: "right",
   },
 });

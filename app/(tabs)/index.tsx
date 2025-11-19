@@ -129,8 +129,6 @@ const HomeScreen = () => {
 
   const getSourceIcon = (source: string) => {
     switch (source) {
-      case "dollar":
-        return <FontAwesome name="dollar" size={16} color="#007AFF" />;
       case "car":
         return <FontAwesome name="car" size={16} color="#34C759" />;
       case "shipping":
@@ -165,7 +163,7 @@ const HomeScreen = () => {
     const selected = searchFilterOptions.find(
       (option) => option.value === searchTable
     );
-    return selected ? selected.label : "همه جداول";
+    return selected ? selected.label : "حمل و نقل";
   };
 
   return (

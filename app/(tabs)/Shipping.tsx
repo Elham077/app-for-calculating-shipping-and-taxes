@@ -132,7 +132,7 @@ const ShippingScreen = () => {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>مزایده</Text>
+              <Text style={styles.label}> (auction)مزایده</Text>
               <TextInput
                 style={styles.input}
                 placeholder="نام مزایده را وارد کنید"
@@ -143,7 +143,7 @@ const ShippingScreen = () => {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>نرخ (افغانی)</Text>
+              <Text style={styles.label}>نرخ (دالر)</Text>
               <TextInput
                 style={styles.input}
                 placeholder="نرخ را وارد کنید"
