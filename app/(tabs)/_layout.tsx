@@ -1,7 +1,5 @@
-import { initDB } from "@/helper/db";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { Tabs } from "expo-router";
-import { useEffect } from "react";
 
 export default function TabLayout() {
   return (
@@ -15,25 +13,17 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Home",
+          title: "صغحه اصلی",
           tabBarIcon: ({ color }) => (
             <FontAwesome name="home" size={24} color={color} />
           ),
         }}
       />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: "Settings",
-          tabBarIcon: ({ color }) => (
-            <FontAwesome name="cog" size={24} color={color} />
-          ),
-        }}
-      />
+
       <Tabs.Screen
         name="Shipping"
         options={{
-          title: "Shipping",
+          title: "حمل و نقل",
           tabBarIcon: ({ color }) => (
             <FontAwesome name="ship" size={24} color={color} />
           ),
@@ -42,9 +32,18 @@ export default function TabLayout() {
       <Tabs.Screen
         name="ImaratTax"
         options={{
-          title: "ImaratTax",
+          title: "مالیات دولت",
           tabBarIcon: ({ color }) => (
             <FontAwesome name="money" size={24} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: "تنظیمات",
+          tabBarIcon: ({ color }) => (
+            <FontAwesome name="cog" size={24} color={color} />
           ),
         }}
       />

@@ -45,42 +45,6 @@ export default function TabSettings() {
             </View>
             <FontAwesome name="chevron-left" size={16} color="#8E8E93" />
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.option}
-            onPress={() => router.push("/(tabs)/ImaratTax")}
-          >
-            <View style={styles.optionContent}>
-              <View style={[styles.optionIcon, { backgroundColor: "#E8F5E8" }]}>
-                <FontAwesome name="car" size={20} color="#34C759" />
-              </View>
-              <View style={styles.optionTextContainer}>
-                <Text style={styles.optionText}>مدیریت موترها</Text>
-                <Text style={styles.optionDescription}>
-                  افزودن، ویرایش و حذف اطلاعات موترها
-                </Text>
-              </View>
-            </View>
-            <FontAwesome name="chevron-left" size={16} color="#8E8E93" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.option}
-            onPress={() => router.push("/(tabs)/Shipping")}
-          >
-            <View style={styles.optionContent}>
-              <View style={[styles.optionIcon, { backgroundColor: "#FFF3E0" }]}>
-                <FontAwesome name="truck" size={20} color="#FF9500" />
-              </View>
-              <View style={styles.optionTextContainer}>
-                <Text style={styles.optionText}>مدیریت حمل و نقل</Text>
-                <Text style={styles.optionDescription}>
-                  مسیرها و نرخ‌های حمل
-                </Text>
-              </View>
-            </View>
-            <FontAwesome name="chevron-left" size={16} color="#8E8E93" />
-          </TouchableOpacity>
         </View>
 
         <ImportExcel />

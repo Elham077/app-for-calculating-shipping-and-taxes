@@ -32,29 +32,17 @@ const HomeScreen = () => {
   // گزینه‌های فیلتر جستجو
   const searchFilterOptions = [
     {
-      label: "همه جداول",
-      value: "all",
-      icon: "search",
-      color: "#007AFF"
-    },
-    {
-      label: "قیمت دالر",
-      value: "dollar",
-      icon: "dollar",
-      color: "#34C759"
-    },
-    {
       label: "موترها",
       value: "car",
       icon: "car",
-      color: "#FF9500"
+      color: "#FF9500",
     },
     {
       label: "حمل و نقل",
       value: "shipping",
       icon: "truck",
-      color: "#5856D6"
-    }
+      color: "#5856D6",
+    },
   ];
 
   // Load data on component mount
@@ -174,7 +162,9 @@ const HomeScreen = () => {
   };
 
   const getSelectedFilterLabel = () => {
-    const selected = searchFilterOptions.find(option => option.value === searchTable);
+    const selected = searchFilterOptions.find(
+      (option) => option.value === searchTable
+    );
     return selected ? selected.label : "همه جداول";
   };
 
@@ -273,7 +263,7 @@ const HomeScreen = () => {
               textAlign="right"
             />
             {search.length > 0 && (
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.clearSearchBtn}
                 onPress={() => setSearch("")}
               >
@@ -313,10 +303,10 @@ const HomeScreen = () => {
                 scrollEnabled={false}
                 keyExtractor={(item) => `${item.source}-${item.id}`}
                 renderItem={({ item }) => (
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={[
                       styles.resultItem,
-                      { borderLeftColor: getSourceColor(item.source) }
+                      { borderLeftColor: getSourceColor(item.source) },
                     ]}
                   >
                     <View style={styles.resultHeader}>
@@ -334,8 +324,27 @@ const HomeScreen = () => {
                     </View>
                     <Text style={styles.resultTitle}>{item.title}</Text>
                     <Text style={styles.resultValue}>
-                      {item.value.toLocaleString()}{" "}
-                      {item.source === "dollar" ? "افغانی" : "ریال"}
+                      {getSelectedFilterLabel() === "موترها"
+                        ? dollarPrice && Number(dollarPrice) > 0
+                          ? (() => {
+                              const val = Number(item.value);
+                              const conv = Number.isFinite(val)
+                                ? val / Number(dollarPrice)
+                                : NaN;
+                              return Number.isFinite(conv)
+                                ? `${conv.toLocaleString()} دالر`
+                                : "—";
+                            })()
+                          : "قیمت دالر ثبت نشده"
+                        : (() => {
+                            const val = Number(item.value);
+                            const formatted = Number.isFinite(val)
+                              ? val.toLocaleString()
+                              : item.value;
+                            const unit =
+                              item.source === "dollar" ? "افغانی" : "دالر";
+                            return `${formatted} ${unit}`;
+                          })()}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -345,12 +354,11 @@ const HomeScreen = () => {
                 <FontAwesome name="search" size={48} color="#C7C7CC" />
                 <Text style={styles.noResultsText}>نتیجه‌ای یافت نشد</Text>
                 <Text style={styles.noResultsSubtext}>
-                  {searchTable === "all" 
+                  {searchTable === "all"
                     ? "سعی کنید عبارت جستجوی خود را تغییر دهید"
-                    : `هیچ نتیجه‌ای در ${getSelectedFilterLabel()} یافت نشد`
-                  }
+                    : `هیچ نتیجه‌ای در ${getSelectedFilterLabel()} یافت نشد`}
                 </Text>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.changeFilterBtn}
                   onPress={() => setSearchTable("all")}
                 >
@@ -372,10 +380,14 @@ const HomeScreen = () => {
 // تابع کمکی برای رنگ‌های منبع
 const getSourceColor = (source: string) => {
   switch (source) {
-    case "dollar": return "#34C759";
-    case "car": return "#FF9500";
-    case "shipping": return "#5856D6";
-    default: return "#007AFF";
+    case "dollar":
+      return "#34C759";
+    case "car":
+      return "#FF9500";
+    case "shipping":
+      return "#5856D6";
+    default:
+      return "#007AFF";
   }
 };
 

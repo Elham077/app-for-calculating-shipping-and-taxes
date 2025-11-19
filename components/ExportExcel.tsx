@@ -169,6 +169,7 @@ const ExportExcel: React.FC = () => {
       setTableCount(count);
     };
     loadTableCount();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [table]);
 
   return (
