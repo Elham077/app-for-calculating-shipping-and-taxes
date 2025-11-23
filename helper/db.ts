@@ -162,7 +162,9 @@ export const addFinalCarPrice = async (
 
 export const getFinalCarPrices = async (): Promise<any[]> => {
   try {
-    const result = await db.getAllAsync(`SELECT * FROM final_car_prices ORDER BY id DESC`);
+    const result = await db.getAllAsync(
+      `SELECT * FROM final_car_prices ORDER BY id DESC`
+    );
     return result as any[];
   } catch (error) {
     console.log("SQL error:", error);
@@ -172,10 +174,7 @@ export const getFinalCarPrices = async (): Promise<any[]> => {
 // حذف یک رکورد بر اساس id
 export const deleteFinalCarPrice = async (id: number): Promise<void> => {
   try {
-    await db.runAsync(
-      `DELETE FROM final_car_prices WHERE id = ?`,
-      [id]
-    );
+    await db.runAsync(`DELETE FROM final_car_prices WHERE id = ?`, [id]);
   } catch (error) {
     console.log("SQL error:", error);
     throw error;

@@ -1,11 +1,9 @@
-/* eslint-disable react-hooks/exhaustive-deps */
 import CategoryDropdown from "@/components/DropDownX";
 import FinalPriceList from "@/components/FinalPriceList";
-
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useRouter } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   FlatList,
   ScrollView,
@@ -17,404 +15,454 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+// ========== TYPES ==========
+type SearchTableType = "all" | "car" | "shipping" | "dollar";
+
+interface SearchResult {
+  source: SearchTableType;
+  id: number;
+  value: number;
+  title: string;
+}
+
+interface Stats {
+  carCount: number;
+  shippingCount: number;
+}
+
+interface SearchFilterOption {
+  label: string;
+  value: SearchTableType;
+  icon: string;
+  color: string;
+}
+
+// ========== CONSTANTS ==========
+const SEARCH_FILTER_OPTIONS: SearchFilterOption[] = [
+  {
+    label: "موترها",
+    value: "car",
+    icon: "car",
+    color: "#FF9500",
+  },
+  {
+    label: "حمل و نقل",
+    value: "shipping",
+    icon: "truck",
+    color: "#5856D6",
+  },
+];
+
+const COLORS = {
+  primary: "#007AFF",
+  success: "#34C759",
+  warning: "#FF9500",
+  secondary: "#5856D6",
+  text: {
+    primary: "#1a1a1a",
+    secondary: "#666",
+    tertiary: "#999",
+  },
+  background: {
+    primary: "#fff",
+    secondary: "#f5f5f5",
+    tertiary: "#fafafa",
+  },
+  border: "#e0e0e0",
+} as const;
+
+// ========== UTILITY FUNCTIONS ==========
+const getSourceConfig = (source: SearchTableType) => {
+  const configs = {
+    dollar: {
+      name: "قیمت دالر",
+      icon: "dollar" as const,
+      color: COLORS.success,
+    },
+    car: { name: "موتر", icon: "car" as const, color: COLORS.warning },
+    shipping: {
+      name: "حمل و نقل",
+      icon: "truck" as const,
+      color: COLORS.secondary,
+    },
+    all: { name: "همه", icon: "search" as const, color: COLORS.primary },
+  };
+
+  return configs[source] || configs.all;
+};
+
+const formatCurrency = (value: number, currency: "AFN" | "USD" = "AFN") => {
+  const formatter = new Intl.NumberFormat("fa-IR");
+  const unit = currency === "AFN" ? "افغانی" : "دالر";
+  return `${formatter.format(value)} ${unit}`;
+};
+
+// ========== MAIN COMPONENT ==========
 const HomeScreen = () => {
   const router = useRouter();
   const db = useSQLiteContext();
+
+  // State
   const [dollarPrice, setDollarPrice] = useState<number | null>(null);
   const [search, setSearch] = useState("");
-  const [searchTable, setSearchTable] = useState<string>("all"); // all, dollar, car, shipping
-  const [results, setResults] = useState<any[]>([]);
-  const [stats, setStats] = useState({
-    carCount: 0,
-    shippingCount: 0,
-  });
+  const [searchTable, setSearchTable] = useState<SearchTableType>("all");
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [stats, setStats] = useState<Stats>({ carCount: 0, shippingCount: 0 });
+  const [isLoading, setIsLoading] = useState(false);
 
-  // گزینه‌های فیلتر جستجو
-  const searchFilterOptions = [
-    {
-      label: "موترها",
-      value: "car",
-      icon: "car",
-      color: "#FF9500",
-    },
-    {
-      label: "حمل و نقل",
-      value: "shipping",
-      icon: "truck",
-      color: "#5856D6",
-    },
-  ];
-
-  // Load data on component mount
-  useEffect(() => {
-    loadDollarPrice();
-    loadStats();
-  }, []);
-
-  const loadDollarPrice = async () => {
+  // ========== DATA FETCHING ==========
+  const loadDollarPrice = useCallback(async () => {
     try {
       const res = await db.getFirstAsync<{ daily_price: number }>(
         "SELECT daily_price FROM Dollar ORDER BY id DESC LIMIT 1"
       );
       setDollarPrice(res?.daily_price || null);
     } catch (error) {
-      console.log("Error loading dollar:", error);
+      console.error("Error loading dollar price:", error);
     }
-  };
+  }, [db]);
 
-  const loadStats = async () => {
+  const loadStats = useCallback(async () => {
     try {
-      const carRes = await db.getFirstAsync<{ count: number }>(
-        "SELECT COUNT(*) as count FROM Car"
-      );
-      const shippingRes = await db.getFirstAsync<{ count: number }>(
-        "SELECT COUNT(*) as count FROM Shipping"
-      );
+      const [carRes, shippingRes] = await Promise.all([
+        db.getFirstAsync<{ count: number }>(
+          "SELECT COUNT(*) as count FROM Car"
+        ),
+        db.getFirstAsync<{ count: number }>(
+          "SELECT COUNT(*) as count FROM Shipping"
+        ),
+      ]);
 
       setStats({
         carCount: carRes?.count || 0,
         shippingCount: shippingRes?.count || 0,
       });
     } catch (error) {
-      console.log("Error loading stats:", error);
+      console.error("Error loading stats:", error);
     }
-  };
+  }, [db]);
 
-  // Perform search
-  const handleSearch = async (text: string) => {
-    setSearch(text);
+  // ========== SEARCH LOGIC ==========
+  const handleSearch = useCallback(
+    async (text: string) => {
+      setSearch(text);
 
-    if (text.trim() === "") {
-      setResults([]);
-      return;
-    }
-
-    try {
-      const pattern = `%${text}%`;
-      let query = "";
-      let params: any[] = [];
-
-      if (searchTable === "all" || searchTable === "dollar") {
-        query += `
-        SELECT 'dollar' AS source, id, daily_price AS value, 'قیمت دالر' as title
-        FROM Dollar
-        WHERE daily_price LIKE ?`;
-        params.push(pattern);
+      if (text.trim() === "") {
+        setResults([]);
+        return;
       }
 
-      if (searchTable === "all" || searchTable === "shipping") {
-        if (query) query += " UNION ";
-        query += `
-        SELECT 'shipping' AS source, id, rate AS value, state || ' - ' || auction as title
-        FROM Shipping
-        WHERE state LIKE ? OR auction LIKE ? OR rate LIKE ?`;
-        params.push(pattern, pattern, pattern);
+      if (searchTable === "all") {
+        setResults([]);
+        return;
       }
 
-      if (searchTable === "all" || searchTable === "car") {
-        if (query) query += " UNION ";
-        query += `
-        SELECT 'car' AS source, id, total_tax AS value, name || ' - ' || modal as title
-        FROM Car
-        WHERE name LIKE ? OR modal LIKE ? OR total_tax LIKE ?`;
-        params.push(pattern, pattern, pattern);
+      setIsLoading(true);
+      try {
+        const pattern = `%${text}%`;
+        let query = "";
+        let params: string[] = [pattern];
+
+        if (searchTable === "shipping") {
+          query = `
+          SELECT 'shipping' AS source, id, rate AS value, 
+                 state || ' - ' || auction AS title
+          FROM Shipping
+          WHERE state LIKE ?`;
+        } else if (searchTable === "car") {
+          query = `
+          SELECT 'car' AS source, id, total_tax AS value, 
+                 name || ' - ' || modal AS title
+          FROM Car
+          WHERE name LIKE ?`;
+        }
+
+        const res = await db.getAllAsync<SearchResult>(query, params);
+        setResults(res);
+      } catch (error) {
+        console.error("Search error:", error);
+        setResults([]);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [searchTable, db]
+  );
+
+  // ========== COMPUTED VALUES ==========
+  const selectedFilterLabel = useMemo(() => {
+    const selected = SEARCH_FILTER_OPTIONS.find(
+      (option) => option.value === searchTable
+    );
+    return selected?.label || "حمل و نقل";
+  }, [searchTable]);
+
+  const formattedResults = useMemo(() => {
+    return results.map((item) => {
+      const sourceConfig = getSourceConfig(item.source);
+
+      let displayValue = "";
+      if (item.source === "car" && dollarPrice && dollarPrice > 0) {
+        const valueInDollars = Number(item.value) / dollarPrice;
+        displayValue = Number.isFinite(valueInDollars)
+          ? formatCurrency(Math.round(valueInDollars), "USD")
+          : "—";
+      } else {
+        displayValue = formatCurrency(
+          Number(item.value),
+          item.source === "dollar" ? "AFN" : "USD"
+        );
       }
 
-      const res = await db.getAllAsync(query, params);
-      setResults(res);
-    } catch (error) {
-      console.log("Search error:", error);
-    }
-  };
+      return {
+        ...item,
+        displayValue,
+        sourceConfig,
+      };
+    });
+  }, [results, dollarPrice]);
 
-  const getSourceIcon = (source: string) => {
-    switch (source) {
-      case "car":
-        return <FontAwesome name="car" size={16} color="#34C759" />;
-      case "shipping":
-        return <FontAwesome name="truck" size={16} color="#FF9500" />;
-      default:
-        return <FontAwesome name="search" size={16} color="#8E8E93" />;
-    }
-  };
+  // ========== EFFECTS ==========
+  useEffect(() => {
+    const initializeData = async () => {
+      await Promise.all([loadDollarPrice(), loadStats()]);
+    };
+    initializeData();
+  }, [loadDollarPrice, loadStats]);
 
-  const refreshPage = () => {
+  // ========== EVENT HANDLERS ==========
+  const refreshPage = useCallback(() => {
     loadDollarPrice();
     loadStats();
     setSearch("");
     setResults([]);
     setSearchTable("all");
-  };
+  }, [loadDollarPrice, loadStats]);
 
-  const getSourceName = (source: string) => {
-    switch (source) {
-      case "dollar":
-        return "قیمت دالر";
-      case "car":
-        return "موتر";
-      case "shipping":
-        return "حمل و نقل";
-      default:
-        return source;
-    }
-  };
+  const handleClearSearch = useCallback(() => {
+    setSearch("");
+    setResults([]);
+  }, []);
 
-  const getSelectedFilterLabel = () => {
-    const selected = searchFilterOptions.find(
-      (option) => option.value === searchTable
+  const navigateToCalculator = useCallback(() => {
+    router.push("/(screen)/FinalCarPriceScreen");
+  }, [router]);
+
+  // ========== RENDER COMPONENTS ==========
+  const renderHeader = () => (
+    <View style={styles.header}>
+      <Text style={styles.headerTitle}>صفحه مدیریت</Text>
+      <Text style={styles.headerSubtitle}>خلاصه اطلاعات و جستجو</Text>
+      <TouchableOpacity style={styles.refreshBtn} onPress={refreshPage}>
+        <FontAwesome name="refresh" size={20} color={COLORS.primary} />
+      </TouchableOpacity>
+    </View>
+  );
+
+  const renderStats = () => (
+    <View style={styles.statsContainer}>
+      <View style={styles.statCard}>
+        <View style={[styles.statIcon, { backgroundColor: "#E3F2FD" }]}>
+          <FontAwesome name="dollar" size={24} color={COLORS.primary} />
+        </View>
+        <Text style={styles.statValue}>
+          {dollarPrice}
+        </Text>
+        <Text style={styles.statLabel}>قیمت دالر</Text>
+      </View>
+
+      <View style={styles.statCard}>
+        <View style={[styles.statIcon, { backgroundColor: "#E8F5E8" }]}>
+          <FontAwesome name="car" size={24} color={COLORS.success} />
+        </View>
+        <Text style={styles.statValue}>{stats.carCount}</Text>
+        <Text style={styles.statLabel}>تعداد موترها</Text>
+      </View>
+
+      <View style={styles.statCard}>
+        <View style={[styles.statIcon, { backgroundColor: "#FFF3E0" }]}>
+          <FontAwesome name="truck" size={24} color={COLORS.warning} />
+        </View>
+        <Text style={styles.statValue}>{stats.shippingCount}</Text>
+        <Text style={styles.statLabel}>مسیر حمل</Text>
+      </View>
+    </View>
+  );
+
+  const renderCalculatorButton = () => (
+    <View style={styles.startBtnSection}>
+      <TouchableOpacity
+        style={styles.startBtn}
+        onPress={navigateToCalculator}
+        activeOpacity={0.7}
+      >
+        <FontAwesome name="calculator" size={20} color="#fff" />
+        <Text style={styles.startBtnText}>محاسبه قیمت نهایی</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  const renderSearchSection = () => (
+    <View style={styles.searchSection}>
+      <View style={styles.searchHeader}>
+        <Text style={styles.sectionTitle}>جستجوی پیشرفته</Text>
+        <View style={styles.filterBadge}>
+          <Text style={styles.filterBadgeText}>
+            فیلتر: {selectedFilterLabel}
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.filterContainer}>
+        <CategoryDropdown
+          value={searchTable}
+          onChange={(v) => setSearchTable(v as SearchTableType)}
+          items={SEARCH_FILTER_OPTIONS}
+          placeholder="فیلتر جستجو..."
+          label="جستجو در:"
+          searchable={true}
+        />
+      </View>
+
+      <View style={styles.searchContainer}>
+        <FontAwesome
+          name="search"
+          size={20}
+          color="#8E8E93"
+          style={styles.searchIcon}
+        />
+        <TextInput
+          style={styles.searchInput}
+          placeholder={`جستجو در ${selectedFilterLabel.toLowerCase()}...`}
+          value={search}
+          onChangeText={handleSearch}
+          textAlign="right"
+          returnKeyType="search"
+        />
+        {search.length > 0 && (
+          <TouchableOpacity
+            style={styles.clearSearchBtn}
+            onPress={handleClearSearch}
+          >
+            <FontAwesome name="times" size={16} color="#8E8E93" />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {searchTable !== "all" && (
+        <View style={styles.activeFilterInfo}>
+          <FontAwesome name="info-circle" size={14} color={COLORS.primary} />
+          <Text style={styles.activeFilterText}>
+            جستجو فقط در {selectedFilterLabel} انجام می‌شود
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+
+  const renderSearchResults = () => {
+    if (search.length === 0) return null;
+
+    return (
+      <View style={styles.resultsSection}>
+        <View style={styles.resultsHeader}>
+          <Text style={styles.resultsTitle}>
+            {`نتایج جستجو برای "${search}"`}
+          </Text>
+          <View style={styles.resultsCount}>
+            <Text style={styles.resultsCountText}>
+              {formattedResults.length} نتیجه
+            </Text>
+          </View>
+        </View>
+
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <Text>در حال جستجو...</Text>
+          </View>
+        ) : formattedResults.length > 0 ? (
+          <FlatList
+            data={formattedResults}
+            scrollEnabled={false}
+            keyExtractor={(item) => `${item.source}-${item.id}`}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={[
+                  styles.resultItem,
+                  { borderLeftColor: item.sourceConfig.color },
+                ]}
+              >
+                <View style={styles.resultHeader}>
+                  <View style={styles.resultSource}>
+                    <FontAwesome
+                      name={item.sourceConfig.icon}
+                      size={16}
+                      color={item.sourceConfig.color}
+                    />
+                    <Text style={styles.resultSourceText}>
+                      {item.sourceConfig.name}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.resultTitle}>{item.title}</Text>
+                <Text style={styles.resultValue}>{item.displayValue}</Text>
+              </TouchableOpacity>
+            )}
+          />
+        ) : (
+          <View style={styles.noResults}>
+            <FontAwesome name="search" size={48} color="#C7C7CC" />
+            <Text style={styles.noResultsText}>نتیجه‌ای یافت نشد</Text>
+            <Text style={styles.noResultsSubtext}>
+              {searchTable === "all"
+                ? "لطفاً یک فیلتر جستجو انتخاب کنید"
+                : `هیچ نتیجه‌ای در ${selectedFilterLabel} یافت نشد`}
+            </Text>
+          </View>
+        )}
+      </View>
     );
-    return selected ? selected.label : "حمل و نقل";
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView}>
-        {/* هدر صفحه */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>صفحه مدیریت</Text>
-          <Text style={styles.headerSubtitle}>خلاصه اطلاعات و جستجو</Text>
-
-          <TouchableOpacity style={styles.refreshBtn} onPress={refreshPage}>
-            <FontAwesome name="refresh" size={20} color="#007AFF" />
-          </TouchableOpacity>
-        </View>
-
-        {/* کارت آمار */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <View style={[styles.statIcon, { backgroundColor: "#E3F2FD" }]}>
-              <FontAwesome name="dollar" size={24} color="#007AFF" />
-            </View>
-            <Text style={styles.statValue}>
-              {dollarPrice
-                ? `${dollarPrice.toLocaleString()} افغانی`
-                : "ثبت نشده"}
-            </Text>
-            <Text style={styles.statLabel}>قیمت دالر</Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <View style={[styles.statIcon, { backgroundColor: "#E8F5E8" }]}>
-              <FontAwesome name="car" size={24} color="#34C759" />
-            </View>
-            <Text style={styles.statValue}>{stats.carCount}</Text>
-            <Text style={styles.statLabel}>تعداد موترها</Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <View style={[styles.statIcon, { backgroundColor: "#FFF3E0" }]}>
-              <FontAwesome name="truck" size={24} color="#FF9500" />
-            </View>
-            <Text style={styles.statValue}>{stats.shippingCount}</Text>
-            <Text style={styles.statLabel}>مسیر حمل</Text>
-          </View>
-        </View>
-
-        {/* دکمه محاسبه قیمت */}
-        <View style={styles.startBtnSection}>
-          <TouchableOpacity
-            style={styles.startBtn}
-            onPress={() => router.push("/(screen)/FinalCarPriceScreen")}
-            activeOpacity={0.7}
-          >
-            <FontAwesome name="calculator" size={20} color="#fff" />
-            <Text style={styles.startBtnText}>محاسبه قیمت نهایی</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* بخش جستجو */}
-        <View style={styles.searchSection}>
-          <View style={styles.searchHeader}>
-            <Text style={styles.sectionTitle}>جستجوی پیشرفته</Text>
-            <View style={styles.filterBadge}>
-              <Text style={styles.filterBadgeText}>
-                فیلتر: {getSelectedFilterLabel()}
-              </Text>
-            </View>
-          </View>
-
-          {/* فیلتر جستجو با Dropdown */}
-          <View style={styles.filterContainer}>
-            <CategoryDropdown
-              value={searchTable}
-              onChange={setSearchTable}
-              items={searchFilterOptions}
-              placeholder="فیلتر جستجو..."
-              label="جستجو در:"
-              searchable={true}
-            />
-          </View>
-
-          {/* نوار جستجو */}
-          <View style={styles.searchContainer}>
-            <FontAwesome
-              name="search"
-              size={20}
-              color="#8E8E93"
-              style={styles.searchIcon}
-            />
-            <TextInput
-              style={styles.searchInput}
-              placeholder={`جستجو در ${getSelectedFilterLabel().toLowerCase()}...`}
-              value={search}
-              onChangeText={handleSearch}
-              textAlign="right"
-            />
-            {search.length > 0 && (
-              <TouchableOpacity
-                style={styles.clearSearchBtn}
-                onPress={() => setSearch("")}
-              >
-                <FontAwesome name="times" size={16} color="#8E8E93" />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* اطلاعات فیلتر فعال */}
-          {searchTable !== "all" && (
-            <View style={styles.activeFilterInfo}>
-              <FontAwesome name="info-circle" size={14} color="#007AFF" />
-              <Text style={styles.activeFilterText}>
-                جستجو فقط در {getSelectedFilterLabel()} انجام می‌شود
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {/* نتایج جستجو */}
-        {search.length > 0 && (
-          <View style={styles.resultsSection}>
-            <View style={styles.resultsHeader}>
-              <Text style={styles.resultsTitle}>
-                {`نتایج جستجو برای "${search}"`}
-              </Text>
-              <View style={styles.resultsCount}>
-                <Text style={styles.resultsCountText}>
-                  {results.length} نتیجه
-                </Text>
-              </View>
-            </View>
-
-            {results.length > 0 ? (
-              <FlatList
-                data={results}
-                scrollEnabled={false}
-                keyExtractor={(item) => `${item.source}-${item.id}`}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={[
-                      styles.resultItem,
-                      { borderLeftColor: getSourceColor(item.source) },
-                    ]}
-                  >
-                    <View style={styles.resultHeader}>
-                      <View style={styles.resultSource}>
-                        {getSourceIcon(item.source)}
-                        <Text style={styles.resultSourceText}>
-                          {getSourceName(item.source)}
-                        </Text>
-                      </View>
-                      <View style={styles.resultBadge}>
-                        <Text style={styles.resultBadgeText}>
-                          {getSourceName(item.source)}
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={styles.resultTitle}>{item.title}</Text>
-                    <Text style={styles.resultValue}>
-                      {getSelectedFilterLabel() === "موترها"
-                        ? dollarPrice && Number(dollarPrice) > 0
-                          ? (() => {
-                              const val = Number(item.value);
-                              const conv = Number.isFinite(val)
-                                ? val / Number(dollarPrice)
-                                : NaN;
-                              return Number.isFinite(conv)
-                                ? `${conv.toLocaleString()} دالر`
-                                : "—";
-                            })()
-                          : "قیمت دالر ثبت نشده"
-                        : (() => {
-                            const val = Number(item.value);
-                            const formatted = Number.isFinite(val)
-                              ? val.toLocaleString()
-                              : item.value;
-                            const unit =
-                              item.source === "dollar" ? "افغانی" : "دالر";
-                            return `${formatted} ${unit}`;
-                          })()}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              />
-            ) : (
-              <View style={styles.noResults}>
-                <FontAwesome name="search" size={48} color="#C7C7CC" />
-                <Text style={styles.noResultsText}>نتیجه‌ای یافت نشد</Text>
-                <Text style={styles.noResultsSubtext}>
-                  {searchTable === "all"
-                    ? "سعی کنید عبارت جستجوی خود را تغییر دهید"
-                    : `هیچ نتیجه‌ای در ${getSelectedFilterLabel()} یافت نشد`}
-                </Text>
-                <TouchableOpacity
-                  style={styles.changeFilterBtn}
-                  onPress={() => setSearchTable("all")}
-                >
-                  <Text style={styles.changeFilterText}>
-                    جستجو در همه جداول
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        )}
-
+        {renderHeader()}
+        {renderStats()}
+        {renderCalculatorButton()}
+        {renderSearchSection()}
+        {renderSearchResults()}
         <FinalPriceList />
       </ScrollView>
     </SafeAreaView>
   );
 };
 
-// تابع کمکی برای رنگ‌های منبع
-const getSourceColor = (source: string) => {
-  switch (source) {
-    case "dollar":
-      return "#34C759";
-    case "car":
-      return "#FF9500";
-    case "shipping":
-      return "#5856D6";
-    default:
-      return "#007AFF";
-  }
-};
-
-export default HomeScreen;
-
+// ========== STYLES ==========
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: COLORS.background.secondary,
   },
   scrollView: {
     flex: 1,
   },
   header: {
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.background.primary,
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0",
+    borderBottomColor: COLORS.border,
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: "bold",
-    color: "#1a1a1a",
+    color: COLORS.text.primary,
     textAlign: "right",
     marginBottom: 4,
   },
   headerSubtitle: {
     fontSize: 16,
-    color: "#666",
+    color: COLORS.text.secondary,
     textAlign: "right",
   },
   statsContainer: {
@@ -425,7 +473,7 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.background.primary,
     padding: 16,
     borderRadius: 12,
     alignItems: "center",
@@ -454,17 +502,17 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 18,
     fontWeight: "bold",
-    color: "#1a1a1a",
+    color: COLORS.text.primary,
     marginBottom: 4,
     textAlign: "center",
   },
   statLabel: {
     fontSize: 12,
-    color: "#666",
+    color: COLORS.text.secondary,
     textAlign: "center",
   },
   startBtnSection: {
-    backgroundColor: "#ffffff",
+    backgroundColor: COLORS.background.primary,
     margin: 16,
     borderRadius: 16,
     shadowColor: "#000",
@@ -474,7 +522,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   startBtn: {
-    backgroundColor: "#2563eb",
+    backgroundColor: COLORS.primary,
     paddingVertical: 16,
     borderRadius: 16,
     alignItems: "center",
@@ -488,7 +536,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   searchSection: {
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.background.primary,
     margin: 16,
     padding: 16,
     borderRadius: 12,
@@ -507,7 +555,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#1a1a1a",
+    color: COLORS.text.primary,
     textAlign: "right",
   },
   filterBadge: {
@@ -518,7 +566,7 @@ const styles = StyleSheet.create({
   },
   filterBadgeText: {
     fontSize: 12,
-    color: "#007AFF",
+    color: COLORS.primary,
     fontWeight: "500",
   },
   filterContainer: {
@@ -530,7 +578,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#ddd",
     borderRadius: 8,
-    backgroundColor: "#fafafa",
+    backgroundColor: COLORS.background.tertiary,
   },
   searchIcon: {
     padding: 12,
@@ -555,7 +603,7 @@ const styles = StyleSheet.create({
   },
   activeFilterText: {
     fontSize: 12,
-    color: "#007AFF",
+    color: COLORS.primary,
     textAlign: "right",
   },
   resultsSection: {
@@ -570,7 +618,7 @@ const styles = StyleSheet.create({
   resultsTitle: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#1a1a1a",
+    color: COLORS.text.primary,
     textAlign: "right",
     flex: 1,
   },
@@ -582,11 +630,11 @@ const styles = StyleSheet.create({
   },
   resultsCountText: {
     fontSize: 12,
-    color: "#666",
+    color: COLORS.text.secondary,
     fontWeight: "500",
   },
   resultItem: {
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.background.primary,
     padding: 16,
     borderRadius: 8,
     marginBottom: 8,
@@ -610,62 +658,48 @@ const styles = StyleSheet.create({
   },
   resultSourceText: {
     fontSize: 12,
-    color: "#666",
-    fontWeight: "500",
-  },
-  resultBadge: {
-    backgroundColor: "#f8f9fa",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  resultBadgeText: {
-    fontSize: 10,
-    color: "#666",
+    color: COLORS.text.secondary,
     fontWeight: "500",
   },
   resultTitle: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#1a1a1a",
+    color: COLORS.text.primary,
     marginBottom: 4,
     textAlign: "right",
   },
   resultValue: {
     fontSize: 14,
-    color: "#007AFF",
+    color: COLORS.primary,
     fontWeight: "500",
     textAlign: "right",
   },
   noResults: {
     alignItems: "center",
     padding: 40,
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.background.primary,
     borderRadius: 12,
   },
   noResultsText: {
     fontSize: 16,
     fontWeight: "500",
-    color: "#666",
+    color: COLORS.text.secondary,
     marginTop: 12,
     marginBottom: 4,
     textAlign: "center",
   },
   noResultsSubtext: {
     fontSize: 14,
-    color: "#999",
+    color: COLORS.text.tertiary,
     textAlign: "center",
     marginBottom: 16,
   },
-  changeFilterBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    backgroundColor: "#E3F2FD",
-    borderRadius: 8,
-  },
-  changeFilterText: {
-    color: "#007AFF",
-    fontSize: 14,
-    fontWeight: "500",
+  loadingContainer: {
+    alignItems: "center",
+    padding: 20,
+    backgroundColor: COLORS.background.primary,
+    borderRadius: 12,
   },
 });
+
+export default HomeScreen;
