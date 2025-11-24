@@ -87,9 +87,8 @@ const getSourceConfig = (source: SearchTableType) => {
 };
 
 const formatCurrency = (value: number, currency: "AFN" | "USD" = "AFN") => {
-  const formatter = new Intl.NumberFormat("fa-IR");
-  const unit = currency === "AFN" ? "افغانی" : "دالر";
-  return `${formatter.format(value)} ${unit}`;
+  const formatter = new Intl.NumberFormat("en");
+  return `${formatter.format(value)} دالر `;
 };
 
 // ========== SUB-COMPONENTS ==========
@@ -215,7 +214,7 @@ const SearchSection: React.FC<SearchSectionProps> = ({
           items={SEARCH_FILTER_OPTIONS}
           placeholder="فیلتر جستجو..."
           label="جستجو در:"
-          searchable={true}
+          searchable={false}
         />
       </View>
 
@@ -398,7 +397,7 @@ const HomeScreen: React.FC = () => {
           SELECT 'shipping' AS source, id, rate AS value, 
                  state || ' - ' || auction AS title
           FROM Shipping
-          WHERE state LIKE ?`;
+          WHERE auction LIKE ?`;
           params = [pattern];
         } else if (table === "car") {
           // فقط name معیار سرچ باشد
