@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { getAllCarsGrouped, getDollar, initDB } from "../helper/db";
+import { getAllCarsGrouped, getDollar, initDB } from "../db/db";
 
 // ========== ENHANCED TYPES ==========
 interface Car {

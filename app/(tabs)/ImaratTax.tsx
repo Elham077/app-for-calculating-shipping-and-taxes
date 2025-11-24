@@ -18,7 +18,7 @@ import {
   getDollar,
   initDB,
   updateCar,
-} from "../../helper/db";
+} from "../../db/db";
 
 // ========== TYPES ==========
 interface Car {
@@ -100,7 +100,10 @@ const STRINGS = {
 } as const;
 
 // ========== UTILITY FUNCTIONS ==========
-const formatCurrency = (value: number, currency: "AFN" | "USD" = "AFN"): string => {
+const formatCurrency = (
+  value: number,
+  currency: "AFN" | "USD" = "AFN"
+): string => {
   const formatter = new Intl.NumberFormat("fa-IR");
   const unit = currency === "AFN" ? STRINGS.messages.afghanCurrency : "$";
   return `${formatter.format(value)} ${unit}`;
@@ -160,7 +163,7 @@ const CarForm: React.FC<CarFormProps> = ({
           style={styles.input}
           placeholder={STRINGS.messages.namePlaceholder}
           value={form.name}
-          onChangeText={(text) => onUpdateField('name', text)}
+          onChangeText={(text) => onUpdateField("name", text)}
           textAlign="right"
         />
       </View>
@@ -171,7 +174,7 @@ const CarForm: React.FC<CarFormProps> = ({
           style={styles.input}
           placeholder={STRINGS.messages.modelPlaceholder}
           value={form.modal}
-          onChangeText={(text) => onUpdateField('modal', text)}
+          onChangeText={(text) => onUpdateField("modal", text)}
           textAlign="right"
         />
       </View>
@@ -183,7 +186,7 @@ const CarForm: React.FC<CarFormProps> = ({
           placeholder={STRINGS.messages.taxPlaceholder}
           keyboardType="numeric"
           value={form.totalTax}
-          onChangeText={(text) => onUpdateField('totalTax', text)}
+          onChangeText={(text) => onUpdateField("totalTax", text)}
           textAlign="right"
         />
       </View>
@@ -194,7 +197,9 @@ const CarForm: React.FC<CarFormProps> = ({
             style={[styles.button, styles.cancelButton]}
             onPress={onCancel}
           >
-            <Text style={styles.cancelButtonText}>{STRINGS.messages.cancel}</Text>
+            <Text style={styles.cancelButtonText}>
+              {STRINGS.messages.cancel}
+            </Text>
           </TouchableOpacity>
         )}
         <TouchableOpacity
@@ -243,12 +248,14 @@ const ListHeader: React.FC<ListHeaderProps> = ({
     <TouchableOpacity
       style={[
         styles.bulkModeButton,
-        { backgroundColor: isBulkMode ? COLORS.danger : COLORS.primary }
+        { backgroundColor: isBulkMode ? COLORS.danger : COLORS.primary },
       ]}
       onPress={onToggleBulkMode}
     >
       <Text style={styles.bulkModeButtonText}>
-        {isBulkMode ? STRINGS.messages.cancelBulkMode : STRINGS.messages.bulkMode}
+        {isBulkMode
+          ? STRINGS.messages.cancelBulkMode
+          : STRINGS.messages.bulkMode}
       </Text>
     </TouchableOpacity>
   </View>
@@ -285,15 +292,13 @@ const CarItem: React.FC<CarItemProps> = ({
             {
               backgroundColor: isSelected ? COLORS.primary : "#fff",
               borderColor: COLORS.primary,
-            }
+            },
           ]}
         >
-          {isSelected && (
-            <FontAwesome name="check" size={14} color="#fff" />
-          )}
+          {isSelected && <FontAwesome name="check" size={14} color="#fff" />}
         </TouchableOpacity>
       )}
-      
+
       <View style={styles.itemContent}>
         <View style={styles.itemHeader}>
           <View style={styles.itemInfo}>
@@ -317,7 +322,9 @@ const CarItem: React.FC<CarItemProps> = ({
               style={[styles.actionButton, styles.deleteButton]}
               onPress={() => onDelete(item.id)}
             >
-              <Text style={styles.deleteButtonText}>{STRINGS.messages.delete}</Text>
+              <Text style={styles.deleteButtonText}>
+                {STRINGS.messages.delete}
+              </Text>
             </TouchableOpacity>
           </View>
         )}
@@ -347,7 +354,10 @@ interface LoadMoreButtonProps {
   onLoadMore: () => void;
 }
 
-const LoadMoreButton: React.FC<LoadMoreButtonProps> = ({ hasMore, onLoadMore }) => {
+const LoadMoreButton: React.FC<LoadMoreButtonProps> = ({
+  hasMore,
+  onLoadMore,
+}) => {
   if (!hasMore) return null;
 
   return (
@@ -519,17 +529,20 @@ const CarScreen: React.FC = () => {
     setEditingId(null);
   }, []);
 
-  const updateFormField = useCallback((field: keyof FormState, value: string) => {
-    setForm(prev => ({ ...prev, [field]: value }));
-  }, []);
+  const updateFormField = useCallback(
+    (field: keyof FormState, value: string) => {
+      setForm((prev) => ({ ...prev, [field]: value }));
+    },
+    []
+  );
 
   const toggleBulkMode = useCallback(() => {
-    setIsBulkMode(prev => !prev);
+    setIsBulkMode((prev) => !prev);
     setSelectedItems(new Set());
   }, []);
 
   const toggleSelectItem = useCallback((id: number) => {
-    setSelectedItems(prev => {
+    setSelectedItems((prev) => {
       const updated = new Set(prev);
       updated.has(id) ? updated.delete(id) : updated.add(id);
       return updated;
@@ -544,7 +557,10 @@ const CarScreen: React.FC = () => {
 
     Alert.alert(
       "تأیید حذف گروهی",
-      STRINGS.messages.confirmBulkDelete.replace("{count}", selectedCount.toString()),
+      STRINGS.messages.confirmBulkDelete.replace(
+        "{count}",
+        selectedCount.toString()
+      ),
       [
         { text: STRINGS.messages.cancel, style: "cancel" },
         {
@@ -585,7 +601,7 @@ const CarScreen: React.FC = () => {
     <SafeScreen>
       <ScrollView style={styles.container}>
         <Header isEditing={isEditing} />
-        
+
         <CarForm
           form={form}
           isEditing={isEditing}
@@ -593,9 +609,9 @@ const CarScreen: React.FC = () => {
           onSave={handleSave}
           onCancel={resetForm}
         />
-        
+
         <SearchBar searchText={searchText} onSearch={handleSearch} />
-        
+
         <ListHeader
           carCount={cars.length}
           isBulkMode={isBulkMode}
@@ -621,7 +637,7 @@ const CarScreen: React.FC = () => {
         />
 
         <LoadMoreButton hasMore={hasMore} onLoadMore={loadMore} />
-        
+
         <BulkDeleteButton
           selectedCount={selectedCount}
           onBulkDelete={handleBulkDelete}

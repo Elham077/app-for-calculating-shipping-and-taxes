@@ -11,7 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { addFinalCarPrice, db, getCar, getShipping } from "../../helper/db";
+import { addFinalCarPrice, db, getCar, getShipping } from "../../db/db";
 
 // ========== TYPES ==========
 interface Shipping {

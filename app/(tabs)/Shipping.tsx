@@ -19,7 +19,7 @@ import {
   getShipping,
   initDB,
   updateShipping,
-} from "../../helper/db";
+} from "../../db/db";
 
 // ========== TYPES ==========
 interface Shipping {

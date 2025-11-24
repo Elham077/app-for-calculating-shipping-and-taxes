@@ -1,4 +1,4 @@
-import { initDB, initFinalCarPricesTable } from "@/helper/db";
+import { initDB, initFinalCarPricesTable } from "@/db/db";
 import { Stack } from "expo-router";
 import { SQLiteProvider } from "expo-sqlite";
 import { StatusBar } from "expo-status-bar";

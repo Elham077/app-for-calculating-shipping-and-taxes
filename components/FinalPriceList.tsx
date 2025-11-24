@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { deleteFinalCarPrice, getFinalCarPrices } from "../helper/db";
+import { deleteFinalCarPrice, getFinalCarPrices } from "../db/db";
 
 // ========== TYPES ==========
 interface FinalCarPrice {
@@ -52,29 +52,32 @@ const FinalPriceList: React.FC = () => {
   const [isBulkMode, setIsBulkMode] = useState(false);
 
   // ========== DATA LOADING ==========
-  const loadData = useCallback(async (showRefresh = false) => {
-    try {
-      if (showRefresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
+  const loadData = useCallback(
+    async (showRefresh = false) => {
+      try {
+        if (showRefresh) {
+          setRefreshing(true);
+        } else {
+          setLoading(true);
+        }
 
-      const data = await getFinalCarPrices();
-      setRecords(data);
-      
-      // فقط اگر در حالت bulk نیستیم، stateها را reset کنیم
-      if (!isBulkMode) {
-        setSelectedItems(new Set());
+        const data = await getFinalCarPrices();
+        setRecords(data);
+
+        // فقط اگر در حالت bulk نیستیم، stateها را reset کنیم
+        if (!isBulkMode) {
+          setSelectedItems(new Set());
+        }
+      } catch (error) {
+        console.error("Error loading records:", error);
+        Alert.alert("خطا", "مشکلی در بارگذاری اطلاعات پیش آمد");
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
-    } catch (error) {
-      console.error("Error loading records:", error);
-      Alert.alert("خطا", "مشکلی در بارگذاری اطلاعات پیش آمد");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [isBulkMode]); // وابستگی به isBulkMode
+    },
+    [isBulkMode]
+  ); // وابستگی به isBulkMode
 
   useEffect(() => {
     loadData();
@@ -133,13 +136,13 @@ const FinalPriceList: React.FC = () => {
   }, []);
 
   const selectAllItems = useCallback(() => {
-    setSelectedItems(prev => {
+    setSelectedItems((prev) => {
       // اگر همه آیتم‌ها انتخاب شده‌اند، همه را پاک کن
       if (prev.size === records.length) {
         return new Set();
       }
       // در غیر این صورت همه را انتخاب کن
-      const allIds = new Set(records.map(item => item.id));
+      const allIds = new Set(records.map((item) => item.id));
       return allIds;
     });
   }, [records]);
@@ -170,7 +173,7 @@ const FinalPriceList: React.FC = () => {
               await deleteFinalCarPrice(id);
               Alert.alert("موفق", "رکورد با موفقیت حذف شد");
               // استفاده از callback برای به‌روزرسانی state
-              setRecords(prev => prev.filter(item => item.id !== id));
+              setRecords((prev) => prev.filter((item) => item.id !== id));
             } catch (error) {
               console.error("Error deleting record:", error);
               Alert.alert("خطا", "مشکلی در حذف رکورد پیش آمد");
@@ -317,7 +320,7 @@ const FinalPriceList: React.FC = () => {
                 onPress={() => handleDelete(item.id, item.car_price)}
               >
                 <FontAwesome name="trash" size={16} color="#FF3B30" />
-              </TouchableOpacity>                                                                                                                                        
+              </TouchableOpacity>
             </View>
           )}
         </View>

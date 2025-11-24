@@ -1,13 +1,13 @@
 import SafeScreen from "@/components/SafeScreen";
 import React, { useEffect, useState } from "react";
-import { 
-  Alert, 
-  StyleSheet, 
-  Text, 
-  TextInput, 
-  View, 
+import {
+  Alert,
   ScrollView,
-  TouchableOpacity 
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import {
   addDollar,
@@ -15,7 +15,7 @@ import {
   getDollar,
   initDB,
   updateDollar,
-} from "../../helper/db";
+} from "../../db/db";
 
 type DollarType = {
   id: number;
@@ -115,10 +115,11 @@ const DollarScreen = () => {
         <View style={styles.header}>
           <Text style={styles.title}>قیمت دالر</Text>
           <Text style={styles.subtitle}>
-            {dollar 
-              ? (editing ? "در حال ویرایش قیمت" : "مشاهده قیمت فعلی") 
-              : "ثبت قیمت جدید"
-            }
+            {dollar
+              ? editing
+                ? "در حال ویرایش قیمت"
+                : "مشاهده قیمت فعلی"
+              : "ثبت قیمت جدید"}
           </Text>
         </View>
 
@@ -154,14 +155,14 @@ const DollarScreen = () => {
               <View style={styles.buttonGroup}>
                 {editing ? (
                   <>
-                    <TouchableOpacity 
-                      style={[styles.button, styles.cancelButton]} 
+                    <TouchableOpacity
+                      style={[styles.button, styles.cancelButton]}
                       onPress={cancelEdit}
                     >
                       <Text style={styles.cancelButtonText}>انصراف</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={[styles.button, styles.saveButton]} 
+                    <TouchableOpacity
+                      style={[styles.button, styles.saveButton]}
                       onPress={handleSave}
                     >
                       <Text style={styles.saveButtonText}>ذخیره تغییرات</Text>
@@ -169,14 +170,14 @@ const DollarScreen = () => {
                   </>
                 ) : (
                   <>
-                    <TouchableOpacity 
-                      style={[styles.button, styles.editButton]} 
+                    <TouchableOpacity
+                      style={[styles.button, styles.editButton]}
                       onPress={handleEdit}
                     >
                       <Text style={styles.editButtonText}>ویرایش قیمت</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={[styles.button, styles.deleteButton]} 
+                    <TouchableOpacity
+                      style={[styles.button, styles.deleteButton]}
                       onPress={handleDelete}
                     >
                       <Text style={styles.deleteButtonText}>حذف قیمت</Text>
@@ -193,7 +194,7 @@ const DollarScreen = () => {
                 <Text style={styles.addDescription}>
                   لطفاً قیمت روز دالر را به افغانی وارد کنید
                 </Text>
-                
+
                 <TextInput
                   style={styles.input}
                   placeholder="مثال: 85.5"
@@ -202,9 +203,9 @@ const DollarScreen = () => {
                   onChangeText={setPrice}
                   textAlign="right"
                 />
-                
-                <TouchableOpacity 
-                  style={[styles.button, styles.saveButton, styles.fullWidth]} 
+
+                <TouchableOpacity
+                  style={[styles.button, styles.saveButton, styles.fullWidth]}
                   onPress={handleSave}
                 >
                   <Text style={styles.saveButtonText}>ثبت قیمت دالر</Text>
@@ -218,9 +219,9 @@ const DollarScreen = () => {
         <View style={styles.infoCard}>
           <Text style={styles.infoTitle}>راهنما</Text>
           <Text style={styles.infoText}>
-            • قیمت دالر باید به واحد افغانی وارد شود{"\n"}
-            • این قیمت در محاسبات مالی استفاده می‌شود{"\n"}
-            • در صورت تغییر قیمت بازار، آن را بروزرسانی کنید
+            • قیمت دالر باید به واحد افغانی وارد شود{"\n"}• این قیمت در محاسبات
+            مالی استفاده می‌شود{"\n"}• در صورت تغییر قیمت بازار، آن را بروزرسانی
+            کنید
           </Text>
         </View>
       </ScrollView>
@@ -231,8 +232,8 @@ const DollarScreen = () => {
 export default DollarScreen;
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
+  container: {
+    flex: 1,
     backgroundColor: "#f5f5f5",
   },
   header: {
