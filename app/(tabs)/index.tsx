@@ -16,7 +16,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 // ========== TYPES ==========
-type SearchTableType = "all" | "car" | "shipping" | "dollar";
+type SearchTableType = "car" | "shipping";
 
 interface SearchResult {
   source: SearchTableType;
@@ -28,6 +28,7 @@ interface SearchResult {
 interface Stats {
   carCount: number;
   shippingCount: number;
+  dollarPrice: number | null;
 }
 
 interface SearchFilterOption {
@@ -74,21 +75,15 @@ const COLORS = {
 // ========== UTILITY FUNCTIONS ==========
 const getSourceConfig = (source: SearchTableType) => {
   const configs = {
-    dollar: {
-      name: "قیمت دالر",
-      icon: "dollar" as const,
-      color: COLORS.success,
-    },
     car: { name: "موتر", icon: "car" as const, color: COLORS.warning },
     shipping: {
       name: "حمل و نقل",
       icon: "truck" as const,
       color: COLORS.secondary,
     },
-    all: { name: "همه", icon: "search" as const, color: COLORS.primary },
   };
 
-  return configs[source] || configs.all;
+  return configs[source] || configs.shipping;
 };
 
 const formatCurrency = (value: number, currency: "AFN" | "USD" = "AFN") => {
@@ -97,215 +92,115 @@ const formatCurrency = (value: number, currency: "AFN" | "USD" = "AFN") => {
   return `${formatter.format(value)} ${unit}`;
 };
 
-// ========== MAIN COMPONENT ==========
-const HomeScreen = () => {
-  const router = useRouter();
-  const db = useSQLiteContext();
+// ========== SUB-COMPONENTS ==========
+interface HeaderProps {
+  onRefresh: () => void;
+}
 
-  // State
-  const [dollarPrice, setDollarPrice] = useState<number | null>(null);
-  const [search, setSearch] = useState("");
-  const [searchTable, setSearchTable] = useState<SearchTableType>("all");
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const [stats, setStats] = useState<Stats>({ carCount: 0, shippingCount: 0 });
-  const [isLoading, setIsLoading] = useState(false);
-
-  // ========== DATA FETCHING ==========
-  const loadDollarPrice = useCallback(async () => {
-    try {
-      const res = await db.getFirstAsync<{ daily_price: number }>(
-        "SELECT daily_price FROM Dollar ORDER BY id DESC LIMIT 1"
-      );
-      setDollarPrice(res?.daily_price || null);
-    } catch (error) {
-      console.error("Error loading dollar price:", error);
-    }
-  }, [db]);
-
-  const loadStats = useCallback(async () => {
-    try {
-      const [carRes, shippingRes] = await Promise.all([
-        db.getFirstAsync<{ count: number }>(
-          "SELECT COUNT(*) as count FROM Car"
-        ),
-        db.getFirstAsync<{ count: number }>(
-          "SELECT COUNT(*) as count FROM Shipping"
-        ),
-      ]);
-
-      setStats({
-        carCount: carRes?.count || 0,
-        shippingCount: shippingRes?.count || 0,
-      });
-    } catch (error) {
-      console.error("Error loading stats:", error);
-    }
-  }, [db]);
-
-  // ========== SEARCH LOGIC ==========
-  const handleSearch = useCallback(
-    async (text: string) => {
-      setSearch(text);
-
-      if (text.trim() === "") {
-        setResults([]);
-        return;
-      }
-
-      if (searchTable === "all") {
-        setResults([]);
-        return;
-      }
-
-      setIsLoading(true);
-      try {
-        const pattern = `%${text}%`;
-        let query = "";
-        let params: string[] = [pattern];
-
-        if (searchTable === "shipping") {
-          query = `
-          SELECT 'shipping' AS source, id, rate AS value, 
-                 state || ' - ' || auction AS title
-          FROM Shipping
-          WHERE state LIKE ?`;
-        } else if (searchTable === "car") {
-          query = `
-          SELECT 'car' AS source, id, total_tax AS value, 
-                 name || ' - ' || modal AS title
-          FROM Car
-          WHERE name LIKE ?`;
-        }
-
-        const res = await db.getAllAsync<SearchResult>(query, params);
-        setResults(res);
-      } catch (error) {
-        console.error("Search error:", error);
-        setResults([]);
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [searchTable, db]
-  );
-
-  // ========== COMPUTED VALUES ==========
-  const selectedFilterLabel = useMemo(() => {
-    const selected = SEARCH_FILTER_OPTIONS.find(
-      (option) => option.value === searchTable
-    );
-    return selected?.label || "حمل و نقل";
-  }, [searchTable]);
-
-  const formattedResults = useMemo(() => {
-    return results.map((item) => {
-      const sourceConfig = getSourceConfig(item.source);
-
-      let displayValue = "";
-      if (item.source === "car" && dollarPrice && dollarPrice > 0) {
-        const valueInDollars = Number(item.value) / dollarPrice;
-        displayValue = Number.isFinite(valueInDollars)
-          ? formatCurrency(Math.round(valueInDollars), "USD")
-          : "—";
-      } else {
-        displayValue = formatCurrency(
-          Number(item.value),
-          item.source === "dollar" ? "AFN" : "USD"
-        );
-      }
-
-      return {
-        ...item,
-        displayValue,
-        sourceConfig,
-      };
-    });
-  }, [results, dollarPrice]);
-
-  // ========== EFFECTS ==========
-  useEffect(() => {
-    const initializeData = async () => {
-      await Promise.all([loadDollarPrice(), loadStats()]);
-    };
-    initializeData();
-  }, [loadDollarPrice, loadStats]);
-
-  // ========== EVENT HANDLERS ==========
-  const refreshPage = useCallback(() => {
-    loadDollarPrice();
-    loadStats();
-    setSearch("");
-    setResults([]);
-    setSearchTable("all");
-  }, [loadDollarPrice, loadStats]);
-
-  const handleClearSearch = useCallback(() => {
-    setSearch("");
-    setResults([]);
-  }, []);
-
-  const navigateToCalculator = useCallback(() => {
-    router.push("/(screen)/FinalCarPriceScreen");
-  }, [router]);
-
-  // ========== RENDER COMPONENTS ==========
-  const renderHeader = () => (
-    <View style={styles.header}>
+const Header: React.FC<HeaderProps> = ({ onRefresh }) => (
+  <View style={styles.header}>
+    <View>
       <Text style={styles.headerTitle}>صفحه مدیریت</Text>
-      <Text style={styles.headerSubtitle}>خلاصه اطلاعات و جستجو</Text>
-      <TouchableOpacity style={styles.refreshBtn} onPress={refreshPage}>
-        <FontAwesome name="refresh" size={20} color={COLORS.primary} />
-      </TouchableOpacity>
+      <Text style={styles.headerSubtitle}>اطلاعات و جستجو</Text>
     </View>
-  );
+    <TouchableOpacity style={styles.refreshBtn} onPress={onRefresh}>
+      <FontAwesome name="refresh" size={20} color={COLORS.primary} />
+    </TouchableOpacity>
+  </View>
+);
 
-  const renderStats = () => (
-    <View style={styles.statsContainer}>
-      <View style={styles.statCard}>
-        <View style={[styles.statIcon, { backgroundColor: "#E3F2FD" }]}>
-          <FontAwesome name="dollar" size={24} color={COLORS.primary} />
-        </View>
-        <Text style={styles.statValue}>
-          {dollarPrice}
-        </Text>
-        <Text style={styles.statLabel}>قیمت دالر</Text>
-      </View>
+interface StatsCardProps {
+  icon: string;
+  value: string | number;
+  label: string;
+  iconColor: string;
+  backgroundColor: string;
+}
 
-      <View style={styles.statCard}>
-        <View style={[styles.statIcon, { backgroundColor: "#E8F5E8" }]}>
-          <FontAwesome name="car" size={24} color={COLORS.success} />
-        </View>
-        <Text style={styles.statValue}>{stats.carCount}</Text>
-        <Text style={styles.statLabel}>تعداد موترها</Text>
-      </View>
-
-      <View style={styles.statCard}>
-        <View style={[styles.statIcon, { backgroundColor: "#FFF3E0" }]}>
-          <FontAwesome name="truck" size={24} color={COLORS.warning} />
-        </View>
-        <Text style={styles.statValue}>{stats.shippingCount}</Text>
-        <Text style={styles.statLabel}>مسیر حمل</Text>
-      </View>
+const StatsCard: React.FC<StatsCardProps> = ({
+  icon,
+  value,
+  label,
+  iconColor,
+  backgroundColor,
+}) => (
+  <View style={styles.statCard}>
+    <View style={[styles.statIcon, { backgroundColor }]}>
+      <FontAwesome name={icon as any} size={24} color={iconColor} />
     </View>
-  );
+    <Text style={styles.statValue}>{value}</Text>
+    <Text style={styles.statLabel}>{label}</Text>
+  </View>
+);
 
-  const renderCalculatorButton = () => (
-    <View style={styles.startBtnSection}>
-      <TouchableOpacity
-        style={styles.startBtn}
-        onPress={navigateToCalculator}
-        activeOpacity={0.7}
-      >
-        <FontAwesome name="calculator" size={20} color="#fff" />
-        <Text style={styles.startBtnText}>محاسبه قیمت نهایی</Text>
-      </TouchableOpacity>
-    </View>
-  );
+interface StatsSectionProps {
+  stats: Stats;
+}
 
-  const renderSearchSection = () => (
+const StatsSection: React.FC<StatsSectionProps> = ({ stats }) => (
+  <View style={styles.statsContainer}>
+    <StatsCard
+      icon="dollar"
+      value={stats.dollarPrice || "—"}
+      label="قیمت دالر"
+      iconColor={COLORS.primary}
+      backgroundColor="#E3F2FD"
+    />
+    <StatsCard
+      icon="car"
+      value={stats.carCount}
+      label="موترها"
+      iconColor={COLORS.success}
+      backgroundColor="#E8F5E8"
+    />
+    <StatsCard
+      icon="truck"
+      value={stats.shippingCount}
+      label="حمل و نقل"
+      iconColor={COLORS.warning}
+      backgroundColor="#FFF3E0"
+    />
+  </View>
+);
+
+interface CalculatorButtonProps {
+  onPress: () => void;
+}
+
+const CalculatorButton: React.FC<CalculatorButtonProps> = ({ onPress }) => (
+  <View style={styles.startBtnSection}>
+    <TouchableOpacity
+      style={styles.startBtn}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <FontAwesome name="calculator" size={20} color="#fff" />
+      <Text style={styles.startBtnText}>محاسبه قیمت</Text>
+    </TouchableOpacity>
+  </View>
+);
+
+interface SearchSectionProps {
+  searchTable: SearchTableType;
+  search: string;
+  selectedFilterLabel: string;
+  onSearchTableChange: (value: SearchTableType) => void;
+  onSearchChange: (text: string) => void;
+  onClearSearch: () => void;
+}
+
+const SearchSection: React.FC<SearchSectionProps> = ({
+  searchTable,
+  search,
+  selectedFilterLabel,
+  onSearchTableChange,
+  onSearchChange,
+  onClearSearch,
+}) => {
+  return (
     <View style={styles.searchSection}>
       <View style={styles.searchHeader}>
-        <Text style={styles.sectionTitle}>جستجوی پیشرفته</Text>
+        <Text style={styles.sectionTitle}>جستجو</Text>
         <View style={styles.filterBadge}>
           <Text style={styles.filterBadgeText}>
             فیلتر: {selectedFilterLabel}
@@ -316,7 +211,7 @@ const HomeScreen = () => {
       <View style={styles.filterContainer}>
         <CategoryDropdown
           value={searchTable}
-          onChange={(v) => setSearchTable(v as SearchTableType)}
+          onChange={(value) => onSearchTableChange(value as SearchTableType)}
           items={SEARCH_FILTER_OPTIONS}
           placeholder="فیلتر جستجو..."
           label="جستجو در:"
@@ -335,103 +230,309 @@ const HomeScreen = () => {
           style={styles.searchInput}
           placeholder={`جستجو در ${selectedFilterLabel.toLowerCase()}...`}
           value={search}
-          onChangeText={handleSearch}
+          onChangeText={onSearchChange}
           textAlign="right"
           returnKeyType="search"
         />
         {search.length > 0 && (
           <TouchableOpacity
             style={styles.clearSearchBtn}
-            onPress={handleClearSearch}
+            onPress={onClearSearch}
           >
             <FontAwesome name="times" size={16} color="#8E8E93" />
           </TouchableOpacity>
         )}
       </View>
 
-      {searchTable !== "all" && (
-        <View style={styles.activeFilterInfo}>
-          <FontAwesome name="info-circle" size={14} color={COLORS.primary} />
-          <Text style={styles.activeFilterText}>
-            جستجو فقط در {selectedFilterLabel} انجام می‌شود
+      <View style={styles.activeFilterInfo}>
+        <FontAwesome name="info-circle" size={14} color={COLORS.primary} />
+        <Text style={styles.activeFilterText}>
+          جستجو فقط در {selectedFilterLabel} انجام می‌شود
+        </Text>
+      </View>
+    </View>
+  );
+};
+
+interface SearchResultItemProps {
+  item: SearchResult & {
+    displayValue: string;
+    sourceConfig: ReturnType<typeof getSourceConfig>;
+  };
+}
+
+const SearchResultItem: React.FC<SearchResultItemProps> = ({ item }) => (
+  <TouchableOpacity
+    style={[styles.resultItem, { borderLeftColor: item.sourceConfig.color }]}
+  >
+    <View style={styles.resultHeader}>
+      <View style={styles.resultSource}>
+        <FontAwesome
+          name={item.sourceConfig.icon}
+          size={16}
+          color={item.sourceConfig.color}
+        />
+        <Text style={styles.resultSourceText}>{item.sourceConfig.name}</Text>
+      </View>
+    </View>
+    <Text style={styles.resultTitle}>{item.title}</Text>
+    <Text style={styles.resultValue}>{item.displayValue}</Text>
+  </TouchableOpacity>
+);
+
+interface SearchResultsProps {
+  search: string;
+  searchTable: SearchTableType;
+  results: (SearchResult & {
+    displayValue: string;
+    sourceConfig: ReturnType<typeof getSourceConfig>;
+  })[];
+  isLoading: boolean;
+  selectedFilterLabel: string;
+}
+
+const SearchResults: React.FC<SearchResultsProps> = ({
+  search,
+  searchTable,
+  results,
+  isLoading,
+  selectedFilterLabel,
+}) => {
+  if (search.length === 0) return null;
+
+  return (
+    <View style={styles.resultsSection}>
+      <View style={styles.resultsHeader}>
+        <Text style={styles.resultsTitle}>
+          {`نتایج جستجو برای "${search}"`}
+        </Text>
+        <View style={styles.resultsCount}>
+          <Text style={styles.resultsCountText}>{results.length} نتیجه</Text>
+        </View>
+      </View>
+
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <Text>در حال جستجو...</Text>
+        </View>
+      ) : results.length > 0 ? (
+        <FlatList
+          data={results}
+          scrollEnabled={false}
+          keyExtractor={(item) => `${item.source}-${item.id}`}
+          renderItem={({ item }) => <SearchResultItem item={item} />}
+        />
+      ) : (
+        <View style={styles.noResults}>
+          <FontAwesome name="search" size={48} color="#C7C7CC" />
+          <Text style={styles.noResultsText}>نتیجه‌ای یافت نشد</Text>
+          <Text style={styles.noResultsSubtext}>
+            {searchTable === "shipping"
+              ? "لطفاً یک فیلتر جستجو انتخاب کنید"
+              : `هیچ نتیجه‌ای در ${selectedFilterLabel} یافت نشد`}
           </Text>
         </View>
       )}
     </View>
   );
+};
 
-  const renderSearchResults = () => {
-    if (search.length === 0) return null;
+// ========== MAIN COMPONENT ==========
+const HomeScreen: React.FC = () => {
+  const router = useRouter();
+  const db = useSQLiteContext();
 
-    return (
-      <View style={styles.resultsSection}>
-        <View style={styles.resultsHeader}>
-          <Text style={styles.resultsTitle}>
-            {`نتایج جستجو برای "${search}"`}
-          </Text>
-          <View style={styles.resultsCount}>
-            <Text style={styles.resultsCountText}>
-              {formattedResults.length} نتیجه
-            </Text>
-          </View>
-        </View>
+  // State
+  const [stats, setStats] = useState<Stats>({
+    carCount: 0,
+    shippingCount: 0,
+    dollarPrice: null,
+  });
+  const [search, setSearch] = useState("");
+  const [searchTable, setSearchTable] = useState<SearchTableType>("shipping");
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-        {isLoading ? (
-          <View style={styles.loadingContainer}>
-            <Text>در حال جستجو...</Text>
-          </View>
-        ) : formattedResults.length > 0 ? (
-          <FlatList
-            data={formattedResults}
-            scrollEnabled={false}
-            keyExtractor={(item) => `${item.source}-${item.id}`}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={[
-                  styles.resultItem,
-                  { borderLeftColor: item.sourceConfig.color },
-                ]}
-              >
-                <View style={styles.resultHeader}>
-                  <View style={styles.resultSource}>
-                    <FontAwesome
-                      name={item.sourceConfig.icon}
-                      size={16}
-                      color={item.sourceConfig.color}
-                    />
-                    <Text style={styles.resultSourceText}>
-                      {item.sourceConfig.name}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={styles.resultTitle}>{item.title}</Text>
-                <Text style={styles.resultValue}>{item.displayValue}</Text>
-              </TouchableOpacity>
-            )}
-          />
-        ) : (
-          <View style={styles.noResults}>
-            <FontAwesome name="search" size={48} color="#C7C7CC" />
-            <Text style={styles.noResultsText}>نتیجه‌ای یافت نشد</Text>
-            <Text style={styles.noResultsSubtext}>
-              {searchTable === "all"
-                ? "لطفاً یک فیلتر جستجو انتخاب کنید"
-                : `هیچ نتیجه‌ای در ${selectedFilterLabel} یافت نشد`}
-            </Text>
-          </View>
-        )}
-      </View>
+  // ========== DATA FETCHING ==========
+  const loadStats = useCallback(async (): Promise<void> => {
+    try {
+      const [dollarRes, carRes, shippingRes] = await Promise.all([
+        db.getFirstAsync<{ daily_price: number }>(
+          "SELECT daily_price FROM Dollar ORDER BY id DESC LIMIT 1"
+        ),
+        db.getFirstAsync<{ count: number }>(
+          "SELECT COUNT(*) as count FROM Car"
+        ),
+        db.getFirstAsync<{ count: number }>(
+          "SELECT COUNT(*) as count FROM Shipping"
+        ),
+      ]);
+
+      setStats({
+        dollarPrice: dollarRes?.daily_price || null,
+        carCount: carRes?.count || 0,
+        shippingCount: shippingRes?.count || 0,
+      });
+    } catch (error) {
+      console.error("Error loading stats:", error);
+    }
+  }, [db]);
+
+  // ========== SEARCH LOGIC ==========
+  const performSearch = useCallback(
+    async (searchText: string, table: SearchTableType) => {
+      if (searchText.trim() === "") {
+        setResults([]);
+        return;
+      }
+
+      setIsLoading(true);
+      try {
+        const pattern = `%${searchText}%`;
+        let query = "";
+        let params: string[] = [];
+
+        if (table === "shipping") {
+          // فقط state معیار سرچ باشد
+          query = `
+          SELECT 'shipping' AS source, id, rate AS value, 
+                 state || ' - ' || auction AS title
+          FROM Shipping
+          WHERE state LIKE ?`;
+          params = [pattern];
+        } else if (table === "car") {
+          // فقط name معیار سرچ باشد
+          query = `
+          SELECT 'car' AS source, id, total_tax AS value, 
+                 name || ' - ' || modal AS title
+          FROM Car
+          WHERE name LIKE ?`;
+          params = [pattern];
+        }
+
+        const searchResults = await db.getAllAsync<SearchResult>(query, params);
+        setResults(searchResults);
+      } catch (error) {
+        console.error("Search error:", error);
+        setResults([]);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [db]
+  );
+
+  const handleSearch = useCallback(
+    (text: string) => {
+      setSearch(text);
+      if (text.trim() === "") {
+        setResults([]);
+        return;
+      }
+      performSearch(text, searchTable);
+    },
+    [searchTable, performSearch]
+  );
+
+  // ========== COMPUTED VALUES ==========
+  const selectedFilterLabel = useMemo(() => {
+    const selected = SEARCH_FILTER_OPTIONS.find(
+      (option) => option.value === searchTable
     );
-  };
+    return selected?.label || "همه";
+  }, [searchTable]);
+
+  const formattedResults = useMemo(() => {
+    return results.map((item) => {
+      const sourceConfig = getSourceConfig(item.source);
+
+      let displayValue = "";
+      if (item.source === "car" && stats.dollarPrice && stats.dollarPrice > 0) {
+        const valueInDollars = Number(item.value) / stats.dollarPrice;
+        displayValue = Number.isFinite(valueInDollars)
+          ? formatCurrency(Math.round(valueInDollars), "USD")
+          : "—";
+      } else {
+        displayValue = formatCurrency(
+          Number(item.value),
+          item.source === "shipping" ? "AFN" : "USD"
+        );
+      }
+
+      return {
+        ...item,
+        displayValue,
+        sourceConfig,
+      };
+    });
+  }, [results, stats.dollarPrice]);
+
+  // ========== EVENT HANDLERS ==========
+  const refreshPage = useCallback(() => {
+    loadStats();
+    setSearch("");
+    setResults([]);
+    setSearchTable("shipping");
+  }, [loadStats]);
+
+  const handleClearSearch = useCallback(() => {
+    setSearch("");
+    setResults([]);
+  }, []);
+
+  const handleSearchTableChange = useCallback(
+    (value: SearchTableType) => {
+      setSearchTable(value);
+      if (search) {
+        performSearch(search, value);
+      }
+    },
+    [search, performSearch]
+  );
+
+  const navigateToCalculator = useCallback(() => {
+    router.push("/(screen)/FinalCarPriceScreen");
+  }, [router]);
+
+  // ========== EFFECTS ==========
+  useEffect(() => {
+    loadStats();
+  }, [loadStats]);
+
+  useEffect(() => {
+    if (search) {
+      const timeoutId = setTimeout(() => {
+        performSearch(search, searchTable);
+      }, 300);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [search, searchTable]);
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView}>
-        {renderHeader()}
-        {renderStats()}
-        {renderCalculatorButton()}
-        {renderSearchSection()}
-        {renderSearchResults()}
+        <Header onRefresh={refreshPage} />
+        <StatsSection stats={stats} />
+        <CalculatorButton onPress={navigateToCalculator} />
+
+        <SearchSection
+          searchTable={searchTable}
+          search={search}
+          selectedFilterLabel={selectedFilterLabel}
+          onSearchTableChange={handleSearchTableChange}
+          onSearchChange={handleSearch}
+          onClearSearch={handleClearSearch}
+        />
+
+        <SearchResults
+          search={search}
+          searchTable={searchTable}
+          results={formattedResults}
+          isLoading={isLoading}
+          selectedFilterLabel={selectedFilterLabel}
+        />
+
         <FinalPriceList />
       </ScrollView>
     </SafeAreaView>
@@ -452,6 +553,9 @@ const styles = StyleSheet.create({
     padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
   },
   headerTitle: {
     fontSize: 24,
@@ -464,6 +568,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.text.secondary,
     textAlign: "right",
+  },
+  refreshBtn: {
+    backgroundColor: "#E3F2FD",
+    padding: 10,
+    borderRadius: 30,
   },
   statsContainer: {
     flexDirection: "row-reverse",
@@ -482,14 +591,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-  },
-  refreshBtn: {
-    position: "absolute",
-    left: 20,
-    top: 20,
-    backgroundColor: "#E3F2FD",
-    padding: 10,
-    borderRadius: 30,
   },
   statIcon: {
     width: 50,

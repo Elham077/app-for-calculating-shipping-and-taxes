@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Toyota",
-    "slug": "MyApp",
+    "slug": "Toyota",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.jpg",
@@ -27,9 +27,7 @@
     "web": {
       "output": "static"
     },
-    "plugins": [
-      "expo-router"
-    ],
+    "plugins": ["expo-router"],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true

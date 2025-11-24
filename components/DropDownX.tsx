@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { 
   View, 
   StyleSheet, 
@@ -9,6 +9,7 @@ import { Dropdown } from "react-native-element-dropdown";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import AntDesign from "@expo/vector-icons/AntDesign";
 
+// ========== TYPES ==========
 interface DropdownItem {
   label: string;
   value: string;
@@ -29,6 +30,24 @@ interface CategoryDropdownProps {
   searchable?: boolean;
 }
 
+// ========== CONSTANTS ==========
+const COLORS = {
+  primary: "#007AFF",
+  success: "#34C759",
+  danger: "#FF3B30",
+  text: {
+    primary: "#1a1a1a",
+    secondary: "#666",
+    tertiary: "#999",
+  },
+  background: {
+    primary: "#fff",
+    secondary: "#f5f5f5",
+  },
+  border: "#e5e5e5",
+} as const;
+
+// ========== MAIN COMPONENT ==========
 const CategoryDropdown: React.FC<CategoryDropdownProps> = ({
   value,
   onChange,
@@ -43,10 +62,16 @@ const CategoryDropdown: React.FC<CategoryDropdownProps> = ({
 }) => {
   const [isFocus, setIsFocus] = useState(false);
 
-  const getSelectedItem = () => {
-    return items.find(item => item.value === value);
-  };
+  // ========== COMPUTED VALUES ==========
+  const selectedItem = useMemo(() => 
+    items.find(item => item.value === value),
+    [items, value]
+  );
 
+  const hasError = !!error;
+  const isDisabled = disabled || loading;
+
+  // ========== RENDER FUNCTIONS ==========
   const renderItem = (item: DropdownItem, selected?: boolean) => (
     <View style={[
       styles.itemContainer,
@@ -56,7 +81,7 @@ const CategoryDropdown: React.FC<CategoryDropdownProps> = ({
         <FontAwesome 
           name={item.icon as any} 
           size={16} 
-          color={item.color || "#666"} 
+          color={item.color || COLORS.text.secondary} 
           style={styles.itemIcon}
         />
       )}
@@ -67,11 +92,50 @@ const CategoryDropdown: React.FC<CategoryDropdownProps> = ({
         {item.label}
       </Text>
       {selected && (
-        <AntDesign name="check" size={16} color="#007AFF" />
+        <AntDesign 
+          name="check" 
+          size={16} 
+          color={COLORS.primary} 
+        />
       )}
     </View>
   );
 
+  const renderLeftIcon = () => {
+    if (loading) {
+      return <ActivityIndicator size="small" color={COLORS.primary} />;
+    }
+    
+    if (selectedItem?.icon) {
+      return (
+        <FontAwesome 
+          name={selectedItem.icon as any} 
+          size={16} 
+          color={selectedItem.color || COLORS.text.secondary} 
+        />
+      );
+    }
+    
+    return null;
+  };
+
+  const renderRightIcon = () => (
+    <FontAwesome
+      name={isFocus ? "chevron-up" : "chevron-down"}
+      size={14}
+      color={COLORS.text.secondary}
+    />
+  );
+
+  // ========== STYLES COMPUTATION ==========
+  const dropdownWrapperStyle = [
+    styles.dropdownWrapper,
+    isDisabled && styles.dropdownDisabled,
+    hasError && styles.dropdownError,
+    isFocus && styles.dropdownFocused
+  ];
+
+  // ========== RENDER ==========
   return (
     <View style={styles.container}>
       {/* Label */}
@@ -83,12 +147,7 @@ const CategoryDropdown: React.FC<CategoryDropdownProps> = ({
       )}
 
       {/* Dropdown */}
-      <View style={[
-        styles.dropdownWrapper,
-        disabled && styles.dropdownDisabled,
-        error && styles.dropdownError,
-        isFocus && styles.dropdownFocused
-      ]}>
+      <View style={dropdownWrapperStyle}>
         <Dropdown
           style={styles.dropdown}
           placeholderStyle={styles.placeholderStyle}
@@ -109,47 +168,36 @@ const CategoryDropdown: React.FC<CategoryDropdownProps> = ({
             onChange(item.value);
             setIsFocus(false);
           }}
-          renderLeftIcon={() =>
-            loading ? (
-              <ActivityIndicator size="small" color="#007AFF" />
-            ) : getSelectedItem()?.icon ? (
-              <FontAwesome 
-                name={getSelectedItem()?.icon as any} 
-                size={16} 
-                color={getSelectedItem()?.color || "#666"} 
-              />
-            ) : null
-          }
-          renderRightIcon={() => (
-            <FontAwesome
-              name={isFocus ? "chevron-up" : "chevron-down"}
-              size={14}
-              color="#666"
-            />
-          )}
+          renderLeftIcon={renderLeftIcon}
+          renderRightIcon={renderRightIcon}
           renderItem={renderItem}
-          disable={disabled || loading}
+          disable={isDisabled}
         />
       </View>
 
       {/* Error Message */}
-      {error && (
+      {hasError && (
         <View style={styles.errorContainer}>
-          <FontAwesome name="exclamation-circle" size={12} color="#FF3B30" />
+          <FontAwesome 
+            name="exclamation-circle" 
+            size={12} 
+            color={COLORS.danger} 
+          />
           <Text style={styles.errorText}>{error}</Text>
         </View>
       )}
 
       {/* Helper Text */}
-      {!error && value && (
+      {!hasError && selectedItem && (
         <Text style={styles.helperText}>
-          {items.find(item => item.value === value)?.label} انتخاب شد
+          {selectedItem.label} انتخاب شد
         </Text>
       )}
     </View>
   );
 };
 
+// ========== STYLES ==========
 const styles = StyleSheet.create({
   container: {
     marginVertical: 8,
@@ -157,18 +205,18 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#1a1a1a",
+    color: COLORS.text.primary,
     marginBottom: 8,
     textAlign: "right",
   },
   required: {
-    color: "#FF3B30",
+    color: COLORS.danger,
   },
   dropdownWrapper: {
     borderWidth: 1.5,
-    borderColor: "#e5e5e5",
+    borderColor: COLORS.border,
     borderRadius: 12,
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.background.primary,
     overflow: "hidden",
     shadowColor: "#000",
     shadowOffset: {
@@ -180,17 +228,17 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   dropdownFocused: {
-    borderColor: "#007AFF",
-    shadowColor: "#007AFF",
+    borderColor: COLORS.primary,
+    shadowColor: COLORS.primary,
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 4,
   },
   dropdownError: {
-    borderColor: "#FF3B30",
+    borderColor: COLORS.danger,
   },
   dropdownDisabled: {
-    backgroundColor: "#f5f5f5",
+    backgroundColor: COLORS.background.secondary,
     opacity: 0.7,
   },
   dropdown: {
@@ -199,19 +247,19 @@ const styles = StyleSheet.create({
   },
   placeholderStyle: {
     fontSize: 16,
-    color: "#999",
+    color: COLORS.text.tertiary,
     textAlign: "right",
   },
   selectedTextStyle: {
     fontSize: 16,
-    color: "#1a1a1a",
+    color: COLORS.text.primary,
     fontWeight: "500",
     textAlign: "right",
   },
   dropdownContainer: {
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#e5e5e5",
+    borderColor: COLORS.border,
     marginTop: 4,
     shadowColor: "#000",
     shadowOffset: {
@@ -241,12 +289,12 @@ const styles = StyleSheet.create({
   },
   itemText: {
     fontSize: 16,
-    color: "#1a1a1a",
+    color: COLORS.text.primary,
     flex: 1,
     textAlign: "right",
   },
   selectedItemText: {
-    color: "#007AFF",
+    color: COLORS.primary,
     fontWeight: "600",
   },
   errorContainer: {
@@ -257,12 +305,12 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 12,
-    color: "#FF3B30",
+    color: COLORS.danger,
     textAlign: "right",
   },
   helperText: {
     fontSize: 12,
-    color: "#34C759",
+    color: COLORS.success,
     marginTop: 6,
     textAlign: "right",
     fontWeight: "500",

@@ -311,6 +311,9 @@ const FinalCarPriceScreen: React.FC = () => {
   const renderResult = () => {
     if (finalPrice === null) return null;
 
+    const selectedShipping = shippingList.find(s => s.value === form.selectedShipping);
+    const selectedCar = carList.find(c => c.value === form.selectedCar);
+
     return (
       <View style={styles.resultCard}>
         <Text style={styles.resultTitle}>نتیجه محاسبه</Text>
@@ -329,23 +332,14 @@ const FinalCarPriceScreen: React.FC = () => {
               قیمت پایه: {Number(form.carPrice).toLocaleString()} دالر
             </Text>
           )}
-          {form.selectedShipping && (
+          {selectedShipping && (
             <Text style={styles.breakdownItem}>
-              هزینه حمل:{" "}
-              {shippingList
-                .find((s) => s.value === form.selectedShipping)
-                ?.rate.toLocaleString()}{" "}
-              دالر
+              هزینه حمل: {selectedShipping.rate.toLocaleString()} دالر
             </Text>
           )}
-          {form.selectedCar && dollarPrice && (
+          {selectedCar && dollarPrice && (
             <Text style={styles.breakdownItem}>
-              مالیات:{" "}
-              {(
-                carList.find((c) => c.value === form.selectedCar)!.total_tax /
-                dollarPrice
-              ).toFixed(2)}{" "}
-              دالر
+              مالیات: {(selectedCar.total_tax / dollarPrice).toFixed(2)} دالر
             </Text>
           )}
         </View>
@@ -366,7 +360,7 @@ const FinalCarPriceScreen: React.FC = () => {
 
   return (
     <SafeScreen>
-      <ScrollView style={styles.container} nestedScrollEnabled={true}>
+      <ScrollView style={styles.container}>
         {renderHeader()}
         {renderLoading()}
         {!isLoading && renderForm()}

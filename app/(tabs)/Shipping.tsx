@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-expressions */
+/* eslint-disable react-hooks/exhaustive-deps */
 import CategoryDropdown from "@/components/DropDownX";
 import SafeScreen from "@/components/SafeScreen";
 import { US_STATES } from "@/constants/usStates";
@@ -56,7 +58,7 @@ const COLORS = {
 
 // ========== UTILITY FUNCTIONS ==========
 const formatCurrency = (value: number, currency: "USD" = "USD") => {
-  const formatter = new Intl.NumberFormat("fa-IR");
+  const formatter = new Intl.NumberFormat("en");
   const unit = currency === "USD" ? "دالر" : "";
   return `${formatter.format(value)} ${unit}`;
 };
