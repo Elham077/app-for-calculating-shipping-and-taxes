@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-expressions */
+/* eslint-disable react-hooks/exhaustive-deps */
 import SafeScreen from "@/components/SafeScreen";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -26,10 +28,6 @@ interface Car {
   name: string;
   modal: string;
   total_tax: number;
-}
-
-interface DollarRate {
-  daily_price: number;
 }
 
 interface FormState {

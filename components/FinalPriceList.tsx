@@ -331,7 +331,7 @@ const FinalPriceList: React.FC = () => {
             <View style={styles.breakdownItem}>
               <Text style={styles.breakdownLabel}>قیمت موتر</Text>
               <Text style={styles.breakdownValue}>
-                {Number(item.car_price).toLocaleString()} افغانی
+                {Number(item.car_price).toLocaleString()} دالر
               </Text>
             </View>
             <View style={styles.breakdownItem}>
@@ -345,7 +345,7 @@ const FinalPriceList: React.FC = () => {
             <View style={styles.breakdownItem}>
               <Text style={styles.breakdownLabel}>مالیات داخل کشور</Text>
               <Text style={styles.breakdownValue}>
-                {Number(item.total_tax).toLocaleString()} افغانی
+                {Number(item.total_tax).toLocaleString()} دالر
               </Text>
             </View>
             <View style={styles.breakdownItem}>

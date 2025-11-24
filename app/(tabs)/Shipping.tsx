@@ -376,6 +376,8 @@ const ShippingScreen = () => {
             marginLeft: 10,
             width: 24,
             height: 24,
+            alignItems: "center",
+            justifyContent: "center",
             borderRadius: 4,
             borderWidth: 2,
             borderColor: COLORS.primary,
