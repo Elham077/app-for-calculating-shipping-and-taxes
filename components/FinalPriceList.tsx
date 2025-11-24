@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -142,10 +143,6 @@ const FinalPriceList: React.FC = () => {
       return allIds;
     });
   }, [records]);
-
-  const clearSelection = useCallback(() => {
-    setSelectedItems(new Set());
-  }, []);
 
   const exitBulkMode = useCallback(() => {
     setIsBulkMode(false);

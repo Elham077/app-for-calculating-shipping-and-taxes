@@ -94,6 +94,14 @@ export const addCar = (name: string, modal: string, total_tax: number) =>
   ]);
 
 export const getCar = () => query(`SELECT * FROM Car ORDER BY id DESC`);
+export const getAllCarsGrouped = async () => {
+  const query = `
+    SELECT id, name, modal, total_tax
+    FROM Car
+    ORDER BY name ASC
+  `;
+  return await db.getAllAsync(query);
+};
 
 export const updateCar = (
   id: number,

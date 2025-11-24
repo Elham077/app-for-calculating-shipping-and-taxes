@@ -1,6 +1,5 @@
-/* eslint-disable no-unused-expressions */
-/* eslint-disable react-hooks/exhaustive-deps */
 import SafeScreen from "@/components/SafeScreen";
+import FontAwesome from "@expo/vector-icons/FontAwesome";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -20,7 +19,6 @@ import {
   initDB,
   updateCar,
 } from "../../helper/db";
-import FontAwesome from "@expo/vector-icons/FontAwesome";
 
 // ========== TYPES ==========
 interface Car {
@@ -55,28 +53,332 @@ const COLORS = {
   border: "#e0e0e0",
 } as const;
 
+const STRINGS = {
+  errors: {
+    loadCars: "در بارگذاری اطلاعات موترها مشکلی پیش آمد",
+    saveCar: "در ذخیره اطلاعات مشکلی پیش آمد",
+    deleteCar: "در حذف موتر مشکلی پیش آمد",
+    bulkDelete: "مشکلی در حذف گروهی رخ داد",
+  },
+  success: {
+    save: "اطلاعات موتر با موفقیت به روز شد",
+    add: "موتر جدید با موفقیت افزوده شد",
+    delete: "موتر با موفقیت حذف شد",
+    bulkDelete: "حذف گروهی انجام شد",
+  },
+  validation: {
+    required: "پر کردن تمام فیلدها اجباری است",
+    invalidTax: "مالیات باید یک عدد معتبر باشد",
+  },
+  messages: {
+    noSelection: "هیچ موتری انتخاب نشده است",
+    confirmDelete: "آیا از حذف این موتر اطمینان دارید؟",
+    confirmBulkDelete: "آیا می‌خواهید {count} موتر را حذف کنید؟",
+    carManagement: "🚗 مدیریت موترها",
+    addNewCar: "افزودن موتر جدید",
+    editingCar: "در حال ویرایش موتر",
+    carName: "نام موتر",
+    carModel: "مدل",
+    totalTax: "مالیات کل (افغانی)",
+    carList: "لیست موترها",
+    noCars: "هنوز موتری ثبت نشده است",
+    noCarsSubtitle: "اولین موتر خود را با استفاده از فرم بالا اضافه کنید",
+    searchPlaceholder: "جستجوی موتر...",
+    namePlaceholder: "نام موتر را وارد کنید",
+    modelPlaceholder: "مدل موتر را وارد کنید",
+    taxPlaceholder: "مبلغ مالیات را وارد کنید",
+    update: "بروزرسانی",
+    addCar: "افزودن موتر",
+    cancel: "انصراف",
+    edit: "ویرایش",
+    delete: "حذف",
+    bulkMode: "حالت انتخاب",
+    cancelBulkMode: "لغو حالت انتخاب",
+    loadMore: "نمایش بیشتر",
+    afghanCurrency: "افغانی",
+  },
+} as const;
+
 // ========== UTILITY FUNCTIONS ==========
-const formatCurrency = (value: number, currency: "AFN" | "USD" = "AFN") => {
+const formatCurrency = (value: number, currency: "AFN" | "USD" = "AFN"): string => {
   const formatter = new Intl.NumberFormat("fa-IR");
-  const unit = currency === "AFN" ? "افغانی" : "$";
+  const unit = currency === "AFN" ? STRINGS.messages.afghanCurrency : "$";
   return `${formatter.format(value)} ${unit}`;
 };
 
 const validateForm = (form: FormState): string | null => {
   if (!form.name.trim() || !form.modal.trim() || !form.totalTax.trim()) {
-    return "پر کردن تمام فیلدها اجباری است";
+    return STRINGS.validation.required;
   }
 
   const taxVal = parseFloat(form.totalTax);
   if (isNaN(taxVal) || taxVal <= 0) {
-    return "مالیات باید یک عدد معتبر باشد";
+    return STRINGS.validation.invalidTax;
   }
 
   return null;
 };
 
+// ========== SUB-COMPONENTS ==========
+interface HeaderProps {
+  isEditing: boolean;
+}
+
+const Header: React.FC<HeaderProps> = ({ isEditing }) => (
+  <View style={styles.header}>
+    <Text style={styles.title}>{STRINGS.messages.carManagement}</Text>
+    <Text style={styles.subtitle}>
+      {isEditing ? STRINGS.messages.editingCar : STRINGS.messages.addNewCar}
+    </Text>
+  </View>
+);
+
+interface CarFormProps {
+  form: FormState;
+  isEditing: boolean;
+  onUpdateField: (field: keyof FormState, value: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+}
+
+const CarForm: React.FC<CarFormProps> = ({
+  form,
+  isEditing,
+  onUpdateField,
+  onSave,
+  onCancel,
+}) => (
+  <View style={styles.card}>
+    <Text style={styles.cardTitle}>
+      {isEditing ? STRINGS.messages.edit : STRINGS.messages.addCar}
+    </Text>
+
+    <View style={styles.form}>
+      <View style={styles.inputGroup}>
+        <Text style={styles.label}>{STRINGS.messages.carName}</Text>
+        <TextInput
+          style={styles.input}
+          placeholder={STRINGS.messages.namePlaceholder}
+          value={form.name}
+          onChangeText={(text) => onUpdateField('name', text)}
+          textAlign="right"
+        />
+      </View>
+
+      <View style={styles.inputGroup}>
+        <Text style={styles.label}>{STRINGS.messages.carModel}</Text>
+        <TextInput
+          style={styles.input}
+          placeholder={STRINGS.messages.modelPlaceholder}
+          value={form.modal}
+          onChangeText={(text) => onUpdateField('modal', text)}
+          textAlign="right"
+        />
+      </View>
+
+      <View style={styles.inputGroup}>
+        <Text style={styles.label}>{STRINGS.messages.totalTax}</Text>
+        <TextInput
+          style={styles.input}
+          placeholder={STRINGS.messages.taxPlaceholder}
+          keyboardType="numeric"
+          value={form.totalTax}
+          onChangeText={(text) => onUpdateField('totalTax', text)}
+          textAlign="right"
+        />
+      </View>
+
+      <View style={styles.buttonGroup}>
+        {isEditing && (
+          <TouchableOpacity
+            style={[styles.button, styles.cancelButton]}
+            onPress={onCancel}
+          >
+            <Text style={styles.cancelButtonText}>{STRINGS.messages.cancel}</Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity
+          style={[styles.button, styles.saveButton]}
+          onPress={onSave}
+        >
+          <Text style={styles.saveButtonText}>
+            {isEditing ? STRINGS.messages.update : STRINGS.messages.addCar}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </View>
+);
+
+interface SearchBarProps {
+  searchText: string;
+  onSearch: (text: string) => void;
+}
+
+const SearchBar: React.FC<SearchBarProps> = ({ searchText, onSearch }) => (
+  <View style={styles.searchContainer}>
+    <TextInput
+      style={styles.searchInput}
+      placeholder={STRINGS.messages.searchPlaceholder}
+      value={searchText}
+      onChangeText={onSearch}
+    />
+  </View>
+);
+
+interface ListHeaderProps {
+  carCount: number;
+  isBulkMode: boolean;
+  onToggleBulkMode: () => void;
+}
+
+const ListHeader: React.FC<ListHeaderProps> = ({
+  carCount,
+  isBulkMode,
+  onToggleBulkMode,
+}) => (
+  <View style={styles.listHeader}>
+    <Text style={styles.listTitle}>{STRINGS.messages.carList}</Text>
+    <Text style={styles.listCount}>{carCount} موتر</Text>
+    <TouchableOpacity
+      style={[
+        styles.bulkModeButton,
+        { backgroundColor: isBulkMode ? COLORS.danger : COLORS.primary }
+      ]}
+      onPress={onToggleBulkMode}
+    >
+      <Text style={styles.bulkModeButtonText}>
+        {isBulkMode ? STRINGS.messages.cancelBulkMode : STRINGS.messages.bulkMode}
+      </Text>
+    </TouchableOpacity>
+  </View>
+);
+
+interface CarItemProps {
+  item: Car;
+  dollarRate: number;
+  isBulkMode: boolean;
+  isSelected: boolean;
+  onToggleSelect: (id: number) => void;
+  onEdit: (car: Car) => void;
+  onDelete: (id: number) => void;
+}
+
+const CarItem: React.FC<CarItemProps> = ({
+  item,
+  dollarRate,
+  isBulkMode,
+  isSelected,
+  onToggleSelect,
+  onEdit,
+  onDelete,
+}) => {
+  const dollarAmount = dollarRate > 0 ? item.total_tax / dollarRate : 0;
+
+  return (
+    <View style={styles.itemCard}>
+      {isBulkMode && (
+        <TouchableOpacity
+          onPress={() => onToggleSelect(item.id)}
+          style={[
+            styles.selectionCheckbox,
+            {
+              backgroundColor: isSelected ? COLORS.primary : "#fff",
+              borderColor: COLORS.primary,
+            }
+          ]}
+        >
+          {isSelected && (
+            <FontAwesome name="check" size={14} color="#fff" />
+          )}
+        </TouchableOpacity>
+      )}
+      
+      <View style={styles.itemContent}>
+        <View style={styles.itemHeader}>
+          <View style={styles.itemInfo}>
+            <Text style={styles.itemName}>{item.name}</Text>
+            <Text style={styles.itemModal}>{item.modal}</Text>
+          </View>
+          <Text style={styles.itemTax}>
+            {formatCurrency(item.total_tax)} ({dollarAmount.toFixed(2)}$)
+          </Text>
+        </View>
+
+        {!isBulkMode && (
+          <View style={styles.itemActions}>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.editButton]}
+              onPress={() => onEdit(item)}
+            >
+              <Text style={styles.editButtonText}>{STRINGS.messages.edit}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.deleteButton]}
+              onPress={() => onDelete(item.id)}
+            >
+              <Text style={styles.deleteButtonText}>{STRINGS.messages.delete}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+};
+
+interface EmptyStateProps {
+  isLoading: boolean;
+}
+
+const EmptyState: React.FC<EmptyStateProps> = ({ isLoading }) => {
+  if (isLoading) return null;
+
+  return (
+    <View style={styles.emptyState}>
+      <Text style={styles.emptyIcon}>🚗</Text>
+      <Text style={styles.emptyText}>{STRINGS.messages.noCars}</Text>
+      <Text style={styles.emptySubtext}>{STRINGS.messages.noCarsSubtitle}</Text>
+    </View>
+  );
+};
+
+interface LoadMoreButtonProps {
+  hasMore: boolean;
+  onLoadMore: () => void;
+}
+
+const LoadMoreButton: React.FC<LoadMoreButtonProps> = ({ hasMore, onLoadMore }) => {
+  if (!hasMore) return null;
+
+  return (
+    <TouchableOpacity style={styles.loadMoreButton} onPress={onLoadMore}>
+      <Text style={styles.loadMoreText}>{STRINGS.messages.loadMore}</Text>
+    </TouchableOpacity>
+  );
+};
+
+interface BulkDeleteButtonProps {
+  selectedCount: number;
+  onBulkDelete: () => void;
+}
+
+const BulkDeleteButton: React.FC<BulkDeleteButtonProps> = ({
+  selectedCount,
+  onBulkDelete,
+}) => {
+  if (selectedCount === 0) return null;
+
+  return (
+    <TouchableOpacity style={styles.bulkDeleteButton} onPress={onBulkDelete}>
+      <Text style={styles.bulkDeleteButtonText}>
+        حذف {selectedCount} موتر انتخاب شده
+      </Text>
+    </TouchableOpacity>
+  );
+};
+
 // ========== MAIN COMPONENT ==========
-const CarScreen = () => {
+const CarScreen: React.FC = () => {
   // State
   const [searchText, setSearchText] = useState("");
   const [cars, setCars] = useState<Car[]>([]);
@@ -91,62 +393,6 @@ const CarScreen = () => {
   const [dollarRate, setDollarRate] = useState<number>(1);
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
-
-  const toggleSelectItem = useCallback((id: number) => {
-    setSelectedItems((prev) => {
-      const updated = new Set(prev);
-      updated.has(id) ? updated.delete(id) : updated.add(id);
-      return updated;
-    });
-  }, []);
-  const loadCars = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      const data = await getCar();
-      setCars(data);
-      setPage(1); // Reset to first page when data changes
-    } catch (error) {
-      console.error("Error loading cars:", error);
-      Alert.alert("خطا", "در بارگذاری اطلاعات موترها مشکلی پیش آمد");
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-  const handleBulkDelete = useCallback(() => {
-    if (selectedItems.size === 0) {
-      Alert.alert("انتخاب نشده", "هیچ موتری انتخاب نشده است");
-      return;
-    }
-
-    Alert.alert(
-      "تأیید حذف گروهی",
-      `آیا می‌خواهید ${selectedItems.size} موتر را حذف کنید؟`,
-      [
-        { text: "انصراف", style: "cancel" },
-        {
-          text: "حذف",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              for (const id of selectedItems) {
-                await deleteCar(id);
-              }
-
-              setSelectedItems(new Set());
-              setIsBulkMode(false);
-
-              await loadCars();
-
-              Alert.alert("موفق", "حذف گروهی انجام شد");
-            } catch (error) {
-              console.error(error);
-              Alert.alert("خطا", "مشکلی در حذف گروهی رخ داد");
-            }
-          },
-        },
-      ]
-    );
-  }, [selectedItems, loadCars]);
 
   // ========== COMPUTED VALUES ==========
   const filteredCars = useMemo(() => {
@@ -167,8 +413,22 @@ const CarScreen = () => {
 
   const hasMore = paginatedCars.length < filteredCars.length;
   const isEditing = editingId !== null;
+  const selectedCount = selectedItems.size;
 
   // ========== DATA FETCHING ==========
+  const loadCars = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const data = await getCar();
+      setCars(data);
+      setPage(1);
+    } catch (error) {
+      console.error("Error loading cars:", error);
+      Alert.alert("خطا", STRINGS.errors.loadCars);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   const loadDollarRate = useCallback(async () => {
     try {
@@ -181,10 +441,19 @@ const CarScreen = () => {
     }
   }, []);
 
+  const initializeData = useCallback(async () => {
+    try {
+      await initDB();
+      await Promise.all([loadCars(), loadDollarRate()]);
+    } catch (error) {
+      console.error("Initialization error:", error);
+    }
+  }, [loadCars, loadDollarRate]);
+
   // ========== EVENT HANDLERS ==========
   const handleSearch = useCallback((text: string) => {
     setSearchText(text);
-    setPage(1); // Reset to first page when searching
+    setPage(1);
   }, []);
 
   const handleSave = useCallback(async () => {
@@ -199,17 +468,17 @@ const CarScreen = () => {
 
       if (isEditing && editingId) {
         await updateCar(editingId, form.name, form.modal, taxVal);
-        Alert.alert("موفق", "اطلاعات موتر با موفقیت به روز شد");
+        Alert.alert("موفق", STRINGS.success.save);
       } else {
         await addCar(form.name, form.modal, taxVal);
-        Alert.alert("موفق", "موتر جدید با موفقیت افزوده شد");
+        Alert.alert("موفق", STRINGS.success.add);
       }
 
       resetForm();
       await loadCars();
     } catch (error) {
       console.error("Error saving car:", error);
-      Alert.alert("خطا", "در ذخیره اطلاعات مشکلی پیش آمد");
+      Alert.alert("خطا", STRINGS.errors.saveCar);
     }
   }, [form, editingId, loadCars]);
 
@@ -224,19 +493,19 @@ const CarScreen = () => {
 
   const handleDelete = useCallback(
     (id: number) => {
-      Alert.alert("تأیید حذف", "آیا از حذف این موتر اطمینان دارید؟", [
-        { text: "انصراف", style: "cancel" },
+      Alert.alert("تأیید حذف", STRINGS.messages.confirmDelete, [
+        { text: STRINGS.messages.cancel, style: "cancel" },
         {
-          text: "حذف",
+          text: STRINGS.messages.delete,
           style: "destructive",
           onPress: async () => {
             try {
               await deleteCar(id);
               await loadCars();
-              Alert.alert("حذف شد", "موتر با موفقیت حذف شد");
+              Alert.alert("حذف شد", STRINGS.success.delete);
             } catch (error) {
               console.error("Error deleting car:", error);
-              Alert.alert("خطا", "در حذف موتر مشکلی پیش آمد");
+              Alert.alert("خطا", STRINGS.errors.deleteCar);
             }
           },
         },
@@ -250,13 +519,57 @@ const CarScreen = () => {
     setEditingId(null);
   }, []);
 
-  const convertToDollar = useCallback(
-    (tax: number) => {
-      if (!dollarRate || dollarRate <= 0) return 0;
-      return tax / dollarRate;
-    },
-    [dollarRate]
-  );
+  const updateFormField = useCallback((field: keyof FormState, value: string) => {
+    setForm(prev => ({ ...prev, [field]: value }));
+  }, []);
+
+  const toggleBulkMode = useCallback(() => {
+    setIsBulkMode(prev => !prev);
+    setSelectedItems(new Set());
+  }, []);
+
+  const toggleSelectItem = useCallback((id: number) => {
+    setSelectedItems(prev => {
+      const updated = new Set(prev);
+      updated.has(id) ? updated.delete(id) : updated.add(id);
+      return updated;
+    });
+  }, []);
+
+  const handleBulkDelete = useCallback(() => {
+    if (selectedCount === 0) {
+      Alert.alert("انتخاب نشده", STRINGS.messages.noSelection);
+      return;
+    }
+
+    Alert.alert(
+      "تأیید حذف گروهی",
+      STRINGS.messages.confirmBulkDelete.replace("{count}", selectedCount.toString()),
+      [
+        { text: STRINGS.messages.cancel, style: "cancel" },
+        {
+          text: STRINGS.messages.delete,
+          style: "destructive",
+          onPress: async () => {
+            try {
+              for (const id of selectedItems) {
+                await deleteCar(id);
+              }
+
+              setSelectedItems(new Set());
+              setIsBulkMode(false);
+              await loadCars();
+
+              Alert.alert("موفق", STRINGS.success.bulkDelete);
+            } catch (error) {
+              console.error(error);
+              Alert.alert("خطا", STRINGS.errors.bulkDelete);
+            }
+          },
+        },
+      ]
+    );
+  }, [selectedCount, selectedItems, loadCars]);
 
   const loadMore = useCallback(() => {
     setPage((prev) => prev + 1);
@@ -264,237 +577,55 @@ const CarScreen = () => {
 
   // ========== EFFECTS ==========
   useEffect(() => {
-    const initializeData = async () => {
-      await initDB();
-      await Promise.all([loadCars(), loadDollarRate()]);
-    };
     initializeData();
-  }, [loadCars, loadDollarRate]);
+  }, [initializeData]);
 
-  // ========== RENDER COMPONENTS ==========
-  const renderHeader = () => (
-    <View style={styles.header}>
-      <Text style={styles.title}>🚗 مدیریت موترها</Text>
-      <Text style={styles.subtitle}>
-        {isEditing ? "در حال ویرایش موتر" : "افزودن موتر جدید"}
-      </Text>
-    </View>
-  );
-
-  const renderForm = () => (
-    <View style={styles.card}>
-      <Text style={styles.cardTitle}>
-        {isEditing ? "ویرایش موتر" : "افزودن موتر"}
-      </Text>
-
-      <View style={styles.form}>
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>نام موتر</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="نام موتر را وارد کنید"
-            value={form.name}
-            onChangeText={(text) =>
-              setForm((prev) => ({ ...prev, name: text }))
-            }
-            textAlign="right"
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>مدل</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="مدل موتر را وارد کنید"
-            value={form.modal}
-            onChangeText={(text) =>
-              setForm((prev) => ({ ...prev, modal: text }))
-            }
-            textAlign="right"
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>مالیات کل (افغانی)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="مبلغ مالیات را وارد کنید"
-            keyboardType="numeric"
-            value={form.totalTax}
-            onChangeText={(text) =>
-              setForm((prev) => ({ ...prev, totalTax: text }))
-            }
-            textAlign="right"
-          />
-        </View>
-
-        <View style={styles.buttonGroup}>
-          {isEditing && (
-            <TouchableOpacity
-              style={[styles.button, styles.cancelButton]}
-              onPress={resetForm}
-            >
-              <Text style={styles.cancelButtonText}>انصراف</Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity
-            style={[styles.button, styles.saveButton]}
-            onPress={handleSave}
-          >
-            <Text style={styles.saveButtonText}>
-              {isEditing ? "بروزرسانی" : "افزودن موتر"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </View>
-  );
-
-  const renderSearch = () => (
-    <View style={styles.searchContainer}>
-      <TextInput
-        style={styles.searchInput}
-        placeholder="جستجوی موتر..."
-        value={searchText}
-        onChangeText={handleSearch}
-      />
-    </View>
-  );
-
-  const renderListHeader = () => (
-    <View style={styles.listHeader}>
-      <Text style={styles.listTitle}>لیست موترها</Text>
-      <Text style={styles.listCount}>{cars.length} موتر</Text>
-      <TouchableOpacity
-        style={{
-          backgroundColor: isBulkMode ? COLORS.danger : COLORS.primary,
-          paddingHorizontal: 12,
-          paddingVertical: 6,
-          borderRadius: 8,
-        }}
-        onPress={() => {
-          setIsBulkMode(!isBulkMode);
-          setSelectedItems(new Set());
-        }}
-      >
-        <Text style={{ color: "#fff" }}>
-          {isBulkMode ? "لغو حالت انتخاب" : "حالت انتخاب"}
-        </Text>
-      </TouchableOpacity>
-    </View>
-  );
-
-  const renderCarItem = ({ item }: { item: Car }) => {
-    const dollarAmount = convertToDollar(item.total_tax);
-
-    return (
-      <View style={styles.itemCard}>
-        {isBulkMode && (
-          <TouchableOpacity
-            onPress={() => toggleSelectItem(item.id)}
-            style={{
-              marginLeft: 10,
-              width: 24,
-              height: 24,
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: 4,
-              borderWidth: 2,
-              borderColor: COLORS.primary,
-              backgroundColor: selectedItems.has(item.id)
-                ? COLORS.primary
-                : "#fff",
-            }}
-          >
-            <FontAwesome
-              name="check"
-              size={14}
-              color={selectedItems.has(item.id) ? "#fff" : COLORS.primary}
-            />
-          </TouchableOpacity>
-        )}
-        <View style={styles.itemHeader}>
-          <View style={styles.itemInfo}>
-            <Text style={styles.itemName}>{item.name}</Text>
-            <Text style={styles.itemModal}>{item.modal}</Text>
-          </View>
-          <Text style={styles.itemTax}>
-            {formatCurrency(item.total_tax)} ({dollarAmount.toFixed(2)}$)
-          </Text>
-        </View>
-
-        <View style={styles.itemActions}>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.editButton]}
-            onPress={() => handleEdit(item)}
-          >
-            <Text style={styles.editButtonText}>ویرایش</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.deleteButton]}
-            onPress={() => handleDelete(item.id)}
-          >
-            <Text style={styles.deleteButtonText}>حذف</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  };
-
-  const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <Text style={styles.emptyIcon}>🚗</Text>
-      <Text style={styles.emptyText}>هنوز موتری ثبت نشده است</Text>
-      <Text style={styles.emptySubtext}>
-        اولین موتر خود را با استفاده از فرم بالا اضافه کنید
-      </Text>
-    </View>
-  );
-
-  const renderLoadMore = () => {
-    if (!hasMore) return null;
-
-    return (
-      <TouchableOpacity style={styles.loadMoreButton} onPress={loadMore}>
-        <Text style={styles.loadMoreText}>نمایش بیشتر</Text>
-      </TouchableOpacity>
-    );
-  };
-
+  // ========== RENDER ==========
   return (
     <SafeScreen>
       <ScrollView style={styles.container}>
-        {renderHeader()}
-        {renderForm()}
-        {renderSearch()}
-        {renderListHeader()}
+        <Header isEditing={isEditing} />
+        
+        <CarForm
+          form={form}
+          isEditing={isEditing}
+          onUpdateField={updateFormField}
+          onSave={handleSave}
+          onCancel={resetForm}
+        />
+        
+        <SearchBar searchText={searchText} onSearch={handleSearch} />
+        
+        <ListHeader
+          carCount={cars.length}
+          isBulkMode={isBulkMode}
+          onToggleBulkMode={toggleBulkMode}
+        />
 
         <FlatList
           data={paginatedCars}
           scrollEnabled={false}
           keyExtractor={(item) => item.id.toString()}
-          renderItem={renderCarItem}
-          ListEmptyComponent={!isLoading ? renderEmptyState : null}
+          renderItem={({ item }) => (
+            <CarItem
+              item={item}
+              dollarRate={dollarRate}
+              isBulkMode={isBulkMode}
+              isSelected={selectedItems.has(item.id)}
+              onToggleSelect={toggleSelectItem}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+            />
+          )}
+          ListEmptyComponent={<EmptyState isLoading={isLoading} />}
         />
 
-        {renderLoadMore()}
-        {isBulkMode && selectedItems.size > 0 && (
-          <TouchableOpacity
-            style={{
-              backgroundColor: COLORS.danger,
-              marginHorizontal: 16,
-              marginTop: 10,
-              padding: 14,
-              borderRadius: 8,
-              alignItems: "center",
-            }}
-            onPress={handleBulkDelete}
-          >
-            <Text style={{ color: "#fff", fontSize: 16 }}>
-              حذف {selectedItems.size} موتر انتخاب شده
-            </Text>
-          </TouchableOpacity>
-        )}
+        <LoadMoreButton hasMore={hasMore} onLoadMore={loadMore} />
+        
+        <BulkDeleteButton
+          selectedCount={selectedCount}
+          onBulkDelete={handleBulkDelete}
+        />
       </ScrollView>
     </SafeScreen>
   );
@@ -628,6 +759,16 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 12,
   },
+  bulkModeButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  bulkModeButtonText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "500",
+  },
   itemCard: {
     backgroundColor: COLORS.background.primary,
     marginHorizontal: 16,
@@ -639,6 +780,21 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 3,
     elevation: 2,
+    flexDirection: "row-reverse",
+    alignItems: "flex-start",
+  },
+  itemContent: {
+    flex: 1,
+  },
+  selectionCheckbox: {
+    width: 24,
+    height: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 4,
+    borderWidth: 2,
+    marginLeft: 10,
+    marginTop: 2,
   },
   itemHeader: {
     flexDirection: "row-reverse",
@@ -733,6 +889,19 @@ const styles = StyleSheet.create({
   loadMoreText: {
     color: "#fff",
     fontSize: 16,
+  },
+  bulkDeleteButton: {
+    backgroundColor: COLORS.danger,
+    marginHorizontal: 16,
+    marginTop: 10,
+    padding: 14,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  bulkDeleteButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "500",
   },
 });
 
