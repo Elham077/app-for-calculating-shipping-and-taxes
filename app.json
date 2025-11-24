@@ -27,7 +27,9 @@
     "web": {
       "output": "static"
     },
-    "plugins": ["expo-router"],
+    "plugins": [
+      "expo-router"
+    ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
@@ -35,7 +37,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "47e0caf2-f88a-4016-994c-f799e831f07d"
+        "projectId": "1edb7e88-8403-401e-a950-eecb48d73b9d"
       }
     }
   }
